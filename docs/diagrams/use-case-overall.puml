@@ -1,0 +1,159 @@
+@startuml BrewLite_Overall_UseCase
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam roundcorner 8
+left to right direction
+
+title SƠ ĐỒ USE CASE TỔNG QUÁT - HỆ THỐNG BREWLITE (ASSIGNMENT 2)
+
+' ==========================================
+' ĐỊNH NGHĨA CÁC TÁC NHÂN (ACTORS)
+' ==========================================
+actor "Khách hàng\n(Customer)" as Customer <<Primary>>
+actor "Khách vãng lai\n(Guest Customer)" as Guest <<Primary>>
+actor "Khách đã đăng nhập\n(Member Customer)" as Member <<Primary>>
+actor "Nhân viên quầy\n(Barista / Staff)" as Staff <<Primary>>
+actor "Quản lý cửa hàng\n(Store Manager / Admin)" as Admin <<Primary>>
+
+actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as PaymentGateway <<Secondary / External System>>
+actor "Hệ thống CI/CD & Giám sát\n(DevOps / Monitoring)" as SystemDevOps <<Secondary / System>>
+
+' Quan hệ thừa kế giữa các Actor
+Customer <|-- Guest
+Customer <|-- Member
+
+' ==========================================
+' KHUNG PHẠM VI HỆ THỐNG BREWLITE
+' ==========================================
+rectangle "Hệ thống BrewLite (Next.js Web App & NestJS API)" {
+
+    ' Phân hệ 1: Duyệt & Tùy biến sản phẩm
+    package "Phân hệ Menu & Danh mục sản phẩm" {
+        usecase "UC-01: Xem danh mục đồ uống" as UC_ViewMenu
+        usecase "UC-02: Tìm kiếm & Lọc sản phẩm theo danh mục" as UC_SearchFilter
+        usecase "UC-03: Xem thông tin chi tiết đồ uống" as UC_ViewProductDetail
+        usecase "UC-04: Tùy biến Size & Topping" as UC_CustomizeProduct
+    }
+
+    ' Phân hệ 2: Giỏ hàng
+    package "Phân hệ Giỏ hàng" {
+        usecase "UC-05: Thêm món vào giỏ hàng" as UC_AddToCart
+        usecase "UC-06: Xem & Quản lý giỏ hàng\n(Tăng/giảm SL, xóa món, lưu LocalStorage)" as UC_ManageCart
+        usecase "UC-07: Tính toán tổng tiền realtime" as UC_CalcTotal
+    }
+
+    ' Phân hệ 3: Xác thực người dùng
+    package "Phân hệ Xác thực & Tài khoản" {
+        usecase "UC-08: Đăng ký tài khoản" as UC_Register
+        usecase "UC-09: Đăng nhập & Xác thực JWT" as UC_Login
+        usecase "UC-10: Đăng xuất" as UC_Logout
+    }
+
+    ' Phân hệ 4: Đặt hàng & Thanh toán (Core MVP)
+    package "Phân hệ Đơn hàng & Thanh toán (Core MVP)" {
+        usecase "UC-11: Tạo đơn hàng (Checkout)" as UC_CreateOrder
+        usecase "UC-12: Kiểm tra dữ liệu & tồn kho\n(Transaction & Optimistic Locking)" as UC_ValidateOrder
+        usecase "UC-13: Thực hiện thanh toán mô phỏng\n(Ví điện tử / Thẻ ngân hàng)" as UC_ProcessPayment
+        usecase "UC-14: Xử lý giao dịch thanh toán\n(Idempotency-Key)" as UC_ExecutePayment
+        usecase "UC-15: Áp dụng mã khuyến mãi\n(Promotion Discount)" as UC_ApplyPromotion
+        usecase "UC-16: Tích lũy & Sử dụng điểm thưởng\n(Loyalty Program)" as UC_Loyalty
+        usecase "UC-17: Xử lý thanh toán thất bại &\nBảo toàn giỏ hàng" as UC_PaymentFailed
+    }
+
+    ' Phân hệ 5: Quản lý & Theo dõi đơn hàng
+    package "Phân hệ Quản lý & Theo dõi đơn hàng" {
+        usecase "UC-18: Xem xác nhận đơn hàng\n(Mã đơn, PAID, quầy lấy nước)" as UC_OrderConfirmation
+        usecase "UC-19: Theo dõi trạng thái vòng đời đơn hàng\n(Order State Machine)" as UC_TrackOrder
+        usecase "UC-20: Hủy đơn hàng ở trạng thái PENDING" as UC_CancelOrder
+        usecase "UC-21: Xem lịch sử đơn hàng cá nhân" as UC_OrderHistory
+        usecase "UC-22: Tiếp nhận & Cập nhật trạng thái đơn tại quầy\n(PREPARING -> READY -> COMPLETED)" as UC_StaffUpdateOrder
+    }
+
+    ' Phân hệ 6: Quản trị & Vận hành
+    package "Phân hệ Quản trị & Vận hành" {
+        usecase "UC-23: Quản lý sản phẩm & danh mục đồ uống\n(Thêm, Sửa, Ẩn món, Cập nhật giá)" as UC_ManageProducts
+        usecase "UC-24: Xem báo cáo thống kê doanh thu & đơn hàng" as UC_ViewReports
+        usecase "UC-25: Kiểm tra sức khỏe hệ thống\n(Health Check GET /health)" as UC_HealthCheck
+    }
+}
+
+' ==========================================
+' MỐI LIÊN KẾT TÁC NHÂN VÀ USE CASE (ASSOCIATIONS)
+' ==========================================
+
+' 1. Khách hàng chung (Customer: Guest + Member)
+Customer --> UC_ViewMenu
+Customer --> UC_ViewProductDetail
+Customer --> UC_ManageCart
+
+' 2. Khách vãng lai (Guest)
+Guest --> UC_Register
+Guest --> UC_Login
+
+' 3. Khách đã đăng nhập (Member Customer)
+Member --> UC_Logout
+Member --> UC_CreateOrder
+Member --> UC_ProcessPayment
+Member --> UC_TrackOrder
+Member --> UC_OrderHistory
+
+' 4. Nhân viên quầy (Barista / Staff)
+Staff --> UC_Login
+Staff --> UC_Logout
+Staff --> UC_StaffUpdateOrder
+
+' 5. Quản lý cửa hàng / Quản trị viên (Admin)
+Admin --> UC_Login
+Admin --> UC_Logout
+Admin --> UC_ManageProducts
+Admin --> UC_ViewReports
+
+' 6. Tác nhân bên ngoài & Hệ thống
+UC_ExecutePayment --> PaymentGateway
+SystemDevOps --> UC_HealthCheck
+
+' ==========================================
+' CÁC QUAN HỆ INCLUDE (BẮT BUỘC)
+' ==========================================
+UC_ManageCart ..> UC_CalcTotal : <<include>>
+UC_AddToCart ..> UC_CalcTotal : <<include>>
+UC_CreateOrder ..> UC_ValidateOrder : <<include>>
+UC_CreateOrder ..> UC_Login : <<include>>\n(yêu cầu xác thực)
+UC_ProcessPayment ..> UC_ExecutePayment : <<include>>
+UC_ProcessPayment ..> UC_OrderConfirmation : <<include>>\n(khi thanh toán thành công)
+
+' ==========================================
+' CÁC QUAN HỆ EXTEND (MỞ RỘNG CÓ ĐIỀU KIỆN)
+' ==========================================
+UC_SearchFilter .> UC_ViewMenu : <<extend>>
+UC_CustomizeProduct .> UC_ViewProductDetail : <<extend>>
+UC_AddToCart .> UC_ViewProductDetail : <<extend>>
+UC_ApplyPromotion .> UC_CreateOrder : <<extend>>\n(khi áp dụng voucher)
+UC_Loyalty .> UC_ProcessPayment : <<extend>>\n(khi đổi điểm thưởng)
+UC_PaymentFailed .> UC_ProcessPayment : <<extend>>\n(khi giao dịch thất bại)
+UC_CancelOrder .> UC_TrackOrder : <<extend>>\n(khi đơn ở trạng thái PENDING)
+
+' ==========================================
+' GHI CHÚ BỔ TRỢ KIẾN TRÚC & NGHIỆP VỤ
+' ==========================================
+note right of UC_ExecutePayment
+  Cổng thanh toán mô phỏng xử lý:
+  - Thành công: Chuyển đơn PENDING -> PAID
+  - Thất bại: Chuyển đơn PAYMENT_FAILED
+  - Bảo vệ giao dịch bằng Idempotency-Key (UUID v4)
+end note
+
+note right of UC_StaffUpdateOrder
+  Vòng đời trạng thái đơn hàng (FSM):
+  PENDING -> PAID -> PREPARING -> READY -> COMPLETED
+  (Nhánh ngoại lệ: PAYMENT_FAILED, CANCELLED)
+end note
+
+note bottom of UC_HealthCheck
+  Endpoint GET /health phản hồi trạng thái:
+  - Kết nối Database PostgreSQL
+  - Thời gian Uptime & API Service Ready
+end note
+
+@enduml

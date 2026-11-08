@@ -101,6 +101,5 @@ Không bao gồm trong MVP: nhân viên pha chế tiếp nhận và cập nhật
 
 Sơ đồ Use Case Diagram của nghiệp vụ Đặt và thanh toán đơn hàng
 
-![Hình 1.3 – Use Case Diagram: Đặt và thanh toán đơn hàng (BrewLite)](BrewLite_UseCase_Diagram.png)
 
 *Hình 1.3 – Use Case Diagram: Đặt và thanh toán đơn hàng (BrewLite)*

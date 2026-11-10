@@ -1,0 +1,54 @@
+@startuml
+' BrewLite - Use case diagram: Dat va thanh toan don hang
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam usecase {
+  BackgroundColor #F6F9FF
+  BorderColor #85A9E8
+  ArrowColor #555555
+}
+skinparam actorStyle stickman
+
+title BREWLITE - USE CASE DIAGRAM\nDat va thanh toan don hang
+
+actor "Khách hàng" as Customer
+actor "Cổng thanh toán\nmô phỏng" as Gateway
+
+rectangle "HỆ THỐNG BREWLITE" {
+  usecase "Đăng nhập" as Login
+  usecase "Đặt hàng" as Order
+  usecase "Kiểm tra tồn kho" as Stock
+  usecase "Kiểm tra giỏ hàng" as Cart
+  usecase "Tạo đơn hàng" as CreateOrder
+  usecase "Thanh toán\nđơn hàng" as Payment
+  usecase "Chọn phương thức\nthanh toán" as Method
+  usecase "Thông báo thanh toán\nthất bại" as Failed
+  usecase "Xem xác nhận\nđơn hàng" as Confirmation
+  usecase "Xem lịch sử\nđơn hàng" as History
+}
+
+Customer -- Login
+Customer -- Order
+Customer -- Payment
+Customer -- Confirmation
+Customer -- History
+Gateway -- Payment
+
+Order ..> Stock : <<include>>
+Order ..> Cart : <<include>>
+Order ..> CreateOrder : <<include>>
+Payment ..> Method : <<include>>
+Failed ..> Payment : <<extend>>
+
+note top of Order
+  Điều kiện tiên quyết:
+  - Khách hàng đã đăng nhập
+  - Giỏ hàng có ít nhất một sản phẩm
+end note
+note top of Payment
+  Điều kiện:
+  - Thanh toán không thành công
+  - Đơn ở trạng thái PAYMENT_FAILED
+end note
+@enduml

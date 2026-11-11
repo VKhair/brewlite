@@ -1,54 +1,72 @@
-@startuml
-' BrewLite - Use case diagram: Dat va thanh toan don hang
+@startuml BrewLite_Checkout_Payment
+' Task 1.3 - Chi tiet use-case, dong bo voi use-case-overall.puml va srs.md
 left to right direction
+skinparam defaultFontName Arial
+skinparam monochrome true
 skinparam shadowing false
 skinparam packageStyle rectangle
-skinparam usecase {
-  BackgroundColor #F6F9FF
-  BorderColor #85A9E8
-  ArrowColor #555555
-}
+skinparam roundcorner 0
+skinparam linetype ortho
 skinparam actorStyle stickman
+skinparam ArrowThickness 1
 
-title BREWLITE - USE CASE DIAGRAM\nDat va thanh toan don hang
+title BREWLITE - USE CASE DAT VA THANH TOAN DON HANG (TASK 1.3)
 
-actor "Khách hàng" as Customer
-actor "Cổng thanh toán\nmô phỏng" as Gateway
+actor "Khách hàng đã đăng nhập\n(Member Customer)" as Member
+actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as Gateway
 
-rectangle "HỆ THỐNG BREWLITE" {
-  usecase "Đăng nhập" as Login
-  usecase "Đặt hàng" as Order
-  usecase "Kiểm tra tồn kho" as Stock
-  usecase "Kiểm tra giỏ hàng" as Cart
-  usecase "Tạo đơn hàng" as CreateOrder
-  usecase "Thanh toán\nđơn hàng" as Payment
-  usecase "Chọn phương thức\nthanh toán" as Method
-  usecase "Thông báo thanh toán\nthất bại" as Failed
-  usecase "Xem xác nhận\nđơn hàng" as Confirmation
-  usecase "Xem lịch sử\nđơn hàng" as History
+rectangle "HỆ THỐNG BREWLITE - PHẠM VI CHECKOUT & PAYMENT" {
+  usecase "UC-06: Xem và\nquản lý giỏ hàng" as Cart
+  usecase "UC-11: Tạo đơn hàng\n(Checkout)" as Checkout
+  usecase "UC-12: Kiểm tra dữ liệu\nvà tồn kho" as Validate
+  usecase "UC-13: Thanh toán mô phỏng\n(Ví / Thẻ)" as Pay
+  usecase "UC-14: Xử lý giao dịch\n(Idempotency-Key)" as Execute
+  usecase "UC-15: Áp dụng mã\nkhuyến mãi" as Promo
+  usecase "UC-16: Sử dụng / tích lũy\nđiểm thưởng" as Loyalty
+  usecase "UC-17: Xử lý thanh toán lỗi\nvà giữ giỏ hàng" as Failure
+  usecase "UC-18: Xem xác nhận\nđơn hàng" as Confirm
+  usecase "UC-21: Xem lịch sử\nđơn hàng cá nhân" as History
 }
 
-Customer -- Login
-Customer -- Order
-Customer -- Payment
-Customer -- Confirmation
-Customer -- History
-Gateway -- Payment
+Member -- Cart
+Member -- Checkout
+Member -- Pay
+Member -- Confirm
+Member -- History
+Gateway -- Execute
 
-Order ..> Stock : <<include>>
-Order ..> Cart : <<include>>
-Order ..> CreateOrder : <<include>>
-Payment ..> Method : <<include>>
-Failed ..> Payment : <<extend>>
+Checkout ..> Validate : <<include>>
+Pay ..> Execute : <<include>>
+Promo ..> Checkout : <<extend>>
+Loyalty ..> Pay : <<extend>>
+Failure ..> Pay : <<extend>>
+Confirm ..> Pay : <<extend>>
 
-note top of Order
-  Điều kiện tiên quyết:
-  - Khách hàng đã đăng nhập
-  - Giỏ hàng có ít nhất một sản phẩm
+note bottom of Checkout
+  Tiền điều kiện: giỏ không rỗng,
+  JWT hợp lệ trước POST /orders.
+  Tạo đơn PENDING bằng transaction;
+  thiếu tồn kho thì rollback.
 end note
-note top of Payment
-  Điều kiện:
-  - Thanh toán không thành công
-  - Đơn ở trạng thái PAYMENT_FAILED
+
+note bottom of Execute
+  POST /payments: orderId, paymentMethod,
+  Idempotency-Key (UUID v4).
+  Cùng khóa + cùng đơn: trả kết quả cũ.
+  Cùng khóa + khác đơn: từ chối.
 end note
+
+note bottom of Failure
+  Điều kiện: thanh toán thất bại.
+  Đơn PAYMENT_FAILED, giữ giỏ hàng.
+  Luồng thử lại hiện thực tạo đơn mới;
+  cần thống nhất với SRS.
+end note
+
+note bottom of Confirm
+  Điều kiện mở rộng: thanh toán thành công.
+  Chuyển PENDING -> PAID; hiển thị mã đơn.
+  Sau đó xóa giỏ hàng.
+end note
+
 @enduml

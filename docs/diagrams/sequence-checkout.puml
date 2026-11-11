@@ -1,0 +1,73 @@
+@startuml
+ title BREWLITE - SEQUENCE DIAGRAM\nĐặt hàng và thanh toán đơn hàng
+ skinparam monochrome true
+ skinparam shadowing false
+ skinparam sequenceMessageAlign center
+ skinparam responseMessageBelowArrow false
+ skinparam maxMessageSize 65
+ hide footbox
+
+ actor "Customer" as Customer
+ participant "Next.js UI" as UI
+ participant "NestJS API" as API
+ database "PostgreSQL" as DB
+ participant "Mock Payment Service" as MPS
+
+ == 1. Gửi yêu cầu đặt hàng ==
+ Customer -> UI: Chọn thanh toán
+ UI -> API: POST /orders\n(JWT, giỏ hàng)
+ API -> API: Kiểm tra JWT và validate dữ liệu
+ alt JWT không hợp lệ hoặc dữ liệu lỗi
+   API --> UI: 401 / 400 - Thông báo lỗi
+   UI --> Customer: Hiển thị lỗi
+ else Dữ liệu hợp lệ
+   == 2. Tạo đơn hàng ==
+   API -> DB: BEGIN TRANSACTION
+   API -> DB: Kiểm tra tồn kho và tính lại giá
+   DB --> API: Kết quả kiểm tra
+   alt Không đủ tồn kho
+     API -> DB: ROLLBACK
+     DB --> API: Đã hủy transaction
+     API --> UI: 409 - Không đủ hàng
+     UI --> Customer: Thông báo hết hàng
+   else Đủ tồn kho
+     API -> DB: Tạo Order PENDING và trừ tồn kho
+     DB --> API: orderId, orderCode
+     API -> DB: COMMIT
+     DB --> API: Thành công
+     API --> UI: 201 - Order PENDING
+     UI --> Customer: Hiển thị thông tin đơn hàng
+     == 3. Yêu cầu thanh toán ==
+     Customer -> UI: Chọn phương thức thanh toán
+     UI -> API: POST /payments\n(orderId, Idempotency-Key, JWT)
+     API -> API: Kiểm tra JWT, quyền sở hữu đơn\nvà validate thanh toán
+     API -> DB: Tra cứu Idempotency-Key
+     DB --> API: Kết quả tra cứu
+     alt Khóa đã tồn tại, cùng yêu cầu
+       API -> DB: Lấy kết quả thanh toán đã lưu
+       DB --> API: Payment / Order status
+       API --> UI: Trả kết quả đã ghi nhận
+     else Khóa mới
+       API -> DB: Ghi nhận yêu cầu / Idempotency-Key
+       DB --> API: Đã ghi nhận
+       API -> MPS: Xử lý thanh toán ví / thẻ giả lập
+       MPS --> API: SUCCESS / FAILED
+       alt Thanh toán thành công
+         API -> DB: BEGIN TRANSACTION
+         API -> DB: Lưu Payment SUCCESS\nCập nhật Order = PAID
+         API -> DB: COMMIT
+         DB --> API: Order PAID
+         API --> UI: 200 - Thanh toán thành công
+         UI --> Customer: Hiển thị xác nhận đơn hàng
+       else Thanh toán thất bại
+         API -> DB: BEGIN TRANSACTION
+         API -> DB: Lưu Payment FAILED\nCập nhật Order = PAYMENT_FAILED
+         API -> DB: COMMIT
+         DB --> API: Order PAYMENT_FAILED
+         API --> UI: Thông báo thanh toán thất bại
+         UI --> Customer: Hiển thị lỗi / cho phép thử lại
+       end
+     end
+   end
+ end
+@enduml

@@ -1,72 +1,88 @@
 @startuml BrewLite_Checkout_Payment
-' Task 1.3 - Chi tiet use-case, dong bo voi use-case-overall.puml va srs.md
+' Task 1.3 - Sơ đồ use-case tập trung, bố cục gọn cho báo cáo
+' Đồng bộ mã UC với use-case-overall.puml; không thay đổi nghiệp vụ.
 left to right direction
 skinparam defaultFontName Arial
-skinparam monochrome true
 skinparam shadowing false
 skinparam packageStyle rectangle
-skinparam roundcorner 0
+skinparam roundcorner 10
 skinparam linetype ortho
 skinparam actorStyle stickman
 skinparam ArrowThickness 1
+skinparam nodesep 48
+skinparam ranksep 58
+skinparam padding 8
 
-title BREWLITE - USE CASE DAT VA THANH TOAN DON HANG (TASK 1.3)
-
-actor "Khách hàng đã đăng nhập\n(Member Customer)" as Member
-actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as Gateway
-
-rectangle "HỆ THỐNG BREWLITE - PHẠM VI CHECKOUT & PAYMENT" {
-  usecase "UC-06: Xem và\nquản lý giỏ hàng" as Cart
-  usecase "UC-11: Tạo đơn hàng\n(Checkout)" as Checkout
-  usecase "UC-12: Kiểm tra dữ liệu\nvà tồn kho" as Validate
-  usecase "UC-13: Thanh toán mô phỏng\n(Ví / Thẻ)" as Pay
-  usecase "UC-14: Xử lý giao dịch\n(Idempotency-Key)" as Execute
-  usecase "UC-15: Áp dụng mã\nkhuyến mãi" as Promo
-  usecase "UC-16: Sử dụng / tích lũy\nđiểm thưởng" as Loyalty
-  usecase "UC-17: Xử lý thanh toán lỗi\nvà giữ giỏ hàng" as Failure
-  usecase "UC-18: Xem xác nhận\nđơn hàng" as Confirm
-  usecase "UC-21: Xem lịch sử\nđơn hàng cá nhân" as History
+skinparam usecase {
+    BackgroundColor White
+    BorderColor #444444
+    FontColor #222222
+}
+skinparam rectangle {
+    BackgroundColor #FAFAFA
+    BorderColor #555555
+}
+skinparam actor {
+    FontColor #222222
+    BorderColor #444444
 }
 
+title BREWLITE - USE CASE ĐẶT VÀ THANH TOÁN ĐƠN HÀNG (TASK 1.3)
+
+actor "Khách hàng đã đăng nhập\n(Member Customer)" as Member
+
+rectangle "HỆ THỐNG BREWLITE - PHẠM VI ĐẶT HÀNG & THANH TOÁN" {
+    ' Nhóm chuẩn bị đơn
+    usecase "UC-06\nQuản lý giỏ hàng" as Cart
+    usecase "UC-11\nTạo đơn hàng\n(Checkout)" as Checkout
+    usecase "UC-12\nKiểm tra dữ liệu\nvà tồn kho" as Validate
+    usecase "UC-15\nÁp dụng mã\nkhuyến mãi" as Promo
+
+    ' Nhóm thanh toán
+    usecase "UC-13\nThanh toán mô phỏng\n(Ví / Thẻ)" as Pay
+    usecase "UC-14\nXử lý thanh toán\n(Idempotency-Key)" as Execute
+    usecase "UC-16\nĐiểm thưởng\n(Loyalty)" as Loyalty
+    usecase "UC-17\nXử lý thanh toán lỗi\nvà giữ giỏ hàng" as Failure
+
+    ' Nhóm hậu thanh toán
+    usecase "UC-18\nXem xác nhận\nđơn hàng" as Confirm
+    usecase "UC-21\nXem lịch sử\nđơn hàng" as History
+
+    ' Liên kết bố cục (ẩn, không thuộc mô hình UML)
+    Cart -[hidden]down-> Checkout
+    Checkout -[hidden]down-> Promo
+    Checkout -[hidden]right-> Pay
+    Validate -[hidden]down-> Execute
+    Pay -[hidden]down-> Loyalty
+    Loyalty -[hidden]down-> Failure
+    Pay -[hidden]right-> Confirm
+    Confirm -[hidden]down-> History
+}
+
+actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as Gateway
+
+' Tương tác tác nhân
 Member -- Cart
 Member -- Checkout
 Member -- Pay
 Member -- Confirm
 Member -- History
-Gateway -- Execute
+Execute -- Gateway
 
+' Các quan hệ từ sơ đồ use-case tổng quát
 Checkout ..> Validate : <<include>>
 Pay ..> Execute : <<include>>
 Promo ..> Checkout : <<extend>>
 Loyalty ..> Pay : <<extend>>
 Failure ..> Pay : <<extend>>
-Confirm ..> Pay : <<extend>>
+Confirm ..> Pay : <<extend>>\n[khi thành công]
 
-note bottom of Checkout
-  Tiền điều kiện: giỏ không rỗng,
-  JWT hợp lệ trước POST /orders.
-  Tạo đơn PENDING bằng transaction;
-  thiếu tồn kho thì rollback.
-end note
-
-note bottom of Execute
-  POST /payments: orderId, paymentMethod,
-  Idempotency-Key (UUID v4).
-  Cùng khóa + cùng đơn: trả kết quả cũ.
-  Cùng khóa + khác đơn: từ chối.
-end note
-
-note bottom of Failure
-  Điều kiện: thanh toán thất bại.
-  Đơn PAYMENT_FAILED, giữ giỏ hàng.
-  Luồng thử lại hiện thực tạo đơn mới;
-  cần thống nhất với SRS.
-end note
-
-note bottom of Confirm
-  Điều kiện mở rộng: thanh toán thành công.
-  Chuyển PENDING -> PAID; hiển thị mã đơn.
-  Sau đó xóa giỏ hàng.
-end note
-
+legend bottom
+  **Quy tắc chính**
+  - Đặt đơn: JWT hợp lệ, giỏ không rỗng, kiểm tra tồn kho; tạo PENDING.
+  - Thanh toán: dùng Idempotency-Key để chống xử lý lại cùng yêu cầu.
+  - Thành công: PAID, hiển thị mã đơn và xóa giỏ hàng.
+  - Thất bại: PAYMENT_FAILED, giữ nguyên giỏ hàng.
+  - Ví/Thẻ chỉ là mô phỏng; không giao dịch tiền thật.
+endlegend
 @enduml

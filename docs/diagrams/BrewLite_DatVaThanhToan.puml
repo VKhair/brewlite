@@ -1,54 +1,37 @@
 @startuml
-' BrewLite - Use case diagram: Dat va thanh toan don hang
 left to right direction
 skinparam shadowing false
-skinparam packageStyle rectangle
-skinparam usecase {
-  BackgroundColor #F6F9FF
-  BorderColor #85A9E8
-  ArrowColor #555555
-}
 skinparam actorStyle stickman
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam defaultFontName Arial
 
-title BREWLITE - USE CASE DIAGRAM\nDat va thanh toan don hang
+actor "Khách đã đăng nhập\n(Member Customer)" as Member
+rectangle "HỆ THỐNG BREWLITE - ĐẶT & THANH TOÁN" {
+  usecase "UC-06\nXem & quản lý giỏ hàng" as UC06
+  usecase "UC-09\nĐăng nhập & Xác thực JWT" as UC09
+  usecase "UC-11\nTạo đơn hàng (Checkout)" as UC11
+  usecase "UC-12\nKiểm tra dữ liệu & tồn kho" as UC12
+  usecase "UC-13\nThực hiện thanh toán mô phỏng" as UC13
+  usecase "UC-14\nXử lý giao dịch thanh toán\n(Idempotency-Key)" as UC14
+  usecase "UC-15\nÁp dụng mã khuyến mãi" as UC15
+  usecase "UC-16\nTích lũy & Sử dụng điểm thưởng" as UC16
+  usecase "UC-17\nThanh toán thất bại & bảo toàn giỏ" as UC17
+  usecase "UC-18\nXem xác nhận đơn hàng (PAID)" as UC18
+  usecase "UC-21\nXem lịch sử đơn hàng cá nhân" as UC21
 
-actor "Khách hàng" as Customer
-actor "Cổng thanh toán\nmô phỏng" as Gateway
-
-rectangle "HỆ THỐNG BREWLITE" {
-  usecase "Đăng nhập" as Login
-  usecase "Đặt hàng" as Order
-  usecase "Kiểm tra tồn kho" as Stock
-  usecase "Kiểm tra giỏ hàng" as Cart
-  usecase "Tạo đơn hàng" as CreateOrder
-  usecase "Thanh toán\nđơn hàng" as Payment
-  usecase "Chọn phương thức\nthanh toán" as Method
-  usecase "Thông báo thanh toán\nthất bại" as Failed
-  usecase "Xem xác nhận\nđơn hàng" as Confirmation
-  usecase "Xem lịch sử\nđơn hàng" as History
+  UC11 ..> UC09 : <<include>>\n(yêu cầu xác thực)
+  UC11 ..> UC12 : <<include>>
+  UC13 ..> UC14 : <<include>>
+  UC13 ..> UC18 : <<include>>\n(khi thanh toán thành công)
+  UC15 ..> UC11 : <<extend>>\n(khi áp voucher)
+  UC16 ..> UC13 : <<extend>>\n(khi dùng điểm)
+  UC17 ..> UC13 : <<extend>>\n(khi thanh toán lỗi)
 }
-
-Customer -- Login
-Customer -- Order
-Customer -- Payment
-Customer -- Confirmation
-Customer -- History
-Gateway -- Payment
-
-Order ..> Stock : <<include>>
-Order ..> Cart : <<include>>
-Order ..> CreateOrder : <<include>>
-Payment ..> Method : <<include>>
-Failed ..> Payment : <<extend>>
-
-note top of Order
-  Điều kiện tiên quyết:
-  - Khách hàng đã đăng nhập
-  - Giỏ hàng có ít nhất một sản phẩm
-end note
-note top of Payment
-  Điều kiện:
-  - Thanh toán không thành công
-  - Đơn ở trạng thái PAYMENT_FAILED
-end note
+actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as Gateway
+Member -- UC06
+Member -- UC11
+Member -- UC13
+Member -- UC21
+UC14 -- Gateway
 @enduml

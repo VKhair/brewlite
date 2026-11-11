@@ -1,73 +1,114 @@
 @startuml
- title BREWLITE - SEQUENCE DIAGRAM\nĐặt hàng và thanh toán đơn hàng
- skinparam monochrome true
- skinparam shadowing false
- skinparam sequenceMessageAlign center
- skinparam responseMessageBelowArrow false
- skinparam maxMessageSize 65
- hide footbox
+' Task 2.2 - Sequence checkout, truy vet Task 1.3 / SRS BrewLite
+' Nguon: srs(1).md, use-case-overall(3).puml, Task 1.3 NhatQuan
+' UC-11 (FR-07), UC-13 (FR-08), UC-17 (FR-09), UC-18 (FR-10)
+' NFR-04 JWT, NFR-08 giao dich/idempotency, NFR-09 bao toan gio hang
+skinparam monochrome true
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow false
+skinparam maxMessageSize 72
+skinparam ParticipantPadding 26
+skinparam BoxPadding 12
+hide footbox
 
- actor "Customer" as Customer
- participant "Next.js UI" as UI
- participant "NestJS API" as API
- database "PostgreSQL" as DB
- participant "Mock Payment Service" as MPS
+autonumber
+actor "Khách hàng\n(Member Customer)" as Customer
+participant "Next.js UI" as UI
+participant "NestJS API" as API
+database "PostgreSQL" as DB
+participant "Mock Payment Service\n(PaymentsService noi bo)" as MPS
 
- == 1. Gửi yêu cầu đặt hàng ==
- Customer -> UI: Chọn thanh toán
- UI -> API: POST /orders\n(JWT, giỏ hàng)
- API -> API: Kiểm tra JWT và validate dữ liệu
- alt JWT không hợp lệ hoặc dữ liệu lỗi
-   API --> UI: 401 / 400 - Thông báo lỗi
-   UI --> Customer: Hiển thị lỗi
- else Dữ liệu hợp lệ
-   == 2. Tạo đơn hàng ==
-   API -> DB: BEGIN TRANSACTION
-   API -> DB: Kiểm tra tồn kho và tính lại giá
-   DB --> API: Kết quả kiểm tra
-   alt Không đủ tồn kho
-     API -> DB: ROLLBACK
-     DB --> API: Đã hủy transaction
-     API --> UI: 409 - Không đủ hàng
-     UI --> Customer: Thông báo hết hàng
-   else Đủ tồn kho
-     API -> DB: Tạo Order PENDING và trừ tồn kho
-     DB --> API: orderId, orderCode
-     API -> DB: COMMIT
-     DB --> API: Thành công
-     API --> UI: 201 - Order PENDING
-     UI --> Customer: Hiển thị thông tin đơn hàng
-     == 3. Yêu cầu thanh toán ==
-     Customer -> UI: Chọn phương thức thanh toán
-     UI -> API: POST /payments\n(orderId, Idempotency-Key, JWT)
-     API -> API: Kiểm tra JWT, quyền sở hữu đơn\nvà validate thanh toán
-     API -> DB: Tra cứu Idempotency-Key
-     DB --> API: Kết quả tra cứu
-     alt Khóa đã tồn tại, cùng yêu cầu
-       API -> DB: Lấy kết quả thanh toán đã lưu
-       DB --> API: Payment / Order status
-       API --> UI: Trả kết quả đã ghi nhận
-     else Khóa mới
-       API -> DB: Ghi nhận yêu cầu / Idempotency-Key
-       DB --> API: Đã ghi nhận
-       API -> MPS: Xử lý thanh toán ví / thẻ giả lập
-       MPS --> API: SUCCESS / FAILED
-       alt Thanh toán thành công
-         API -> DB: BEGIN TRANSACTION
-         API -> DB: Lưu Payment SUCCESS\nCập nhật Order = PAID
-         API -> DB: COMMIT
-         DB --> API: Order PAID
-         API --> UI: 200 - Thanh toán thành công
-         UI --> Customer: Hiển thị xác nhận đơn hàng
-       else Thanh toán thất bại
-         API -> DB: BEGIN TRANSACTION
-         API -> DB: Lưu Payment FAILED\nCập nhật Order = PAYMENT_FAILED
-         API -> DB: COMMIT
-         DB --> API: Order PAYMENT_FAILED
-         API --> UI: Thông báo thanh toán thất bại
-         UI --> Customer: Hiển thị lỗi / cho phép thử lại
-       end
-     end
-   end
- end
+== Chuẩn bị và xác thực (UC-06, UC-09) ==
+Customer -> UI: Mở giỏ, chọn Tiến hành thanh toán
+alt Giỏ hàng rỗng (EF-02)
+  UI --> Customer: Không cho checkout, yêu cầu chọn món
+else Giỏ có sản phẩm
+  UI -> UI: Kiểm tra phiên đăng nhập
+  opt Chưa đăng nhập (AF-01)
+    UI --> Customer: Yêu cầu đăng nhập
+    Customer -> UI: Đăng nhập hợp lệ
+  end
+  UI --> Customer: Hiển thị tổng tiền, Ví/Thẻ\n(coupon/điểm nếu áp dụng)
+  opt Thay đổi giỏ / coupon / điểm (AF-02, AF-04, AF-05)
+    Customer -> UI: Điều chỉnh lựa chọn
+    UI -> UI: Cập nhật tổng tạm tính\n(server xác minh lại khi tạo đơn)
+  end
+  Customer -> UI: Chọn EWALLET hoặc CARD, xác nhận
+
+  == Tạo đơn PENDING (UC-11 / FR-07) ==
+  UI -> API: POST /orders (Bearer JWT, cart, tùy chọn)
+  API -> API: Xác thực JWT; validate sản phẩm, size, topping, số lượng
+  alt JWT không hợp lệ / hết hạn (EF-01)
+    API --> UI: 401 Unauthorized
+    UI --> Customer: Đăng nhập lại; giữ giỏ hàng
+  else Dữ liệu không hợp lệ (EF-03)
+    API --> UI: 400 Bad Request
+    UI --> Customer: Thông báo lỗi; sửa giỏ hàng
+  else Dữ liệu hợp lệ
+    API -> DB: BEGIN TRANSACTION\nTính lại giá và kiểm tra tồn kho/nguyên liệu
+    DB --> API: Giá và kết quả kiểm tra
+    alt Thiếu tồn kho / xung đột (EF-04)
+      API -> DB: ROLLBACK
+      API --> UI: Từ chối tạo đơn (không lưu đơn dở dang)
+      UI --> Customer: Thông báo hết hàng; giữ giỏ hàng
+    else Đủ tồn kho
+      API -> DB: Cập nhật tồn kho có điều kiện\nTạo Order PENDING và mã đơn duy nhất
+      API -> DB: COMMIT
+      DB --> API: orderId, orderCode, totalAmount, PENDING
+      API --> UI: 201 Created - Order PENDING
+
+      == Thanh toán mô phỏng (UC-13 / FR-08) ==
+      UI -> API: POST /payments\n(Bearer JWT, orderId, paymentMethod, Idempotency-Key)
+      API -> API: Kiểm tra JWT, quyền sở hữu đơn,\ntrạng thái và dữ liệu thanh toán
+      API -> DB: Tra cứu Idempotency-Key (UC-14)
+      DB --> API: Kết quả tra cứu
+      alt Cùng khóa, cùng đơn - đã ghi nhận (AF-06)
+        API --> UI: Trả kết quả Payment đã lưu (không xử lý lại)
+      else Khóa thuộc đơn khác (EF-06)
+        API --> UI: Từ chối khóa không hợp lệ
+        UI --> Customer: Thông báo lỗi; không thanh toán trùng
+      else Khóa mới
+        API -> MPS: Mô phỏng thanh toán EWALLET / CARD
+        MPS --> API: SUCCESS hoặc FAILED
+        alt SUCCESS
+          API -> DB: BEGIN TRANSACTION
+          API -> DB: Lưu Payment SUCCESS, Order PAID\n(cộng điểm nếu FR-18 áp dụng)
+          API -> DB: COMMIT
+          DB --> API: Đơn PAID, giao dịch đã ghi nhận
+          API --> UI: Kết quả thành công; mã đơn, tổng tiền
+        else FAILED (EF-05)
+          API -> DB: BEGIN TRANSACTION
+          API -> DB: Lưu Payment FAILED, Order PAYMENT_FAILED\nHoàn tồn kho / điểm đã dùng (nếu có)
+          API -> DB: COMMIT
+          DB --> API: Đơn PAYMENT_FAILED
+          API --> UI: Thông báo thanh toán thất bại
+        end
+      end
+
+      == Hiển thị kết quả (UC-17, UC-18) ==
+      alt Kết quả cuối cùng là PAID
+        UI -> UI: Xóa giỏ hàng phía client
+        UI --> Customer: Xác nhận PAID, mã đơn, tổng tiền\nCó thể xem lịch sử (UC-21 / FR-11)
+      else Kết quả PAYMENT_FAILED
+        UI -> UI: Giữ nguyên giỏ hàng (NFR-09)
+        UI --> Customer: Báo lỗi; Thử lại / Quay lại giỏ
+      else Kết quả chưa xác định / lỗi phản hồi (EF-08)
+        UI --> Customer: Không tự kết luận thành công/thất bại\nCần tra cứu trạng thái trước khi thử lại
+        note over UI,API
+          Giới hạn hiện trạng: xác nhận lại toàn bộ checkout
+          có thể tạo orderId và Idempotency-Key mới.
+          Chống lặp chỉ bảo đảm cho cùng khóa và cùng đơn.
+          SRS AC-09.3 và mã nguồn cần thống nhất cách thử lại.
+        end note
+      end
+    end
+  end
+end
+
+note over API,DB
+  Mọi lỗi trong transaction phải hoàn tác thao tác dở dang.
+  SRS NFR-08 mô tả optimistic locking; báo cáo hiện thực
+  mô tả cập nhật tồn kho nguyên tử có điều kiện.
+end note
 @enduml

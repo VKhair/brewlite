@@ -1,15 +1,14 @@
 @startuml
-' Task 2.2 - Sequence checkout, truy vet Task 1.3 / SRS BrewLite
-' Nguon: srs(1).md, use-case-overall(3).puml, Task 1.3 NhatQuan
-' UC-11 (FR-07), UC-13 (FR-08), UC-17 (FR-09), UC-18 (FR-10)
-' NFR-04 JWT, NFR-08 giao dich/idempotency, NFR-09 bao toan gio hang
+' BrewLite - Task 2.2 / Task 1.3 / SRS
+' Thiết kế BỔ SUNG bảo vệ đồng thời cho UC-14, chưa xác nhận đã hiện thực trong code.
+' FR-07, FR-08 (AC-08.3), FR-09, FR-10; NFR-04, NFR-08, NFR-09.
 skinparam monochrome true
 skinparam shadowing false
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow false
-skinparam maxMessageSize 72
-skinparam ParticipantPadding 26
-skinparam BoxPadding 12
+skinparam maxMessageSize 66
+skinparam ParticipantPadding 22
+skinparam BoxPadding 10
 hide footbox
 
 autonumber
@@ -17,89 +16,105 @@ actor "Khách hàng\n(Member Customer)" as Customer
 participant "Next.js UI" as UI
 participant "NestJS API" as API
 database "PostgreSQL" as DB
-participant "Mock Payment Service\n(PaymentsService noi bo)" as MPS
+participant "Mock Payment Service\n(nội bộ PaymentsService)" as MPS
 
 == Chuẩn bị và xác thực (UC-06, UC-09) ==
-Customer -> UI: Mở giỏ, chọn Tiến hành thanh toán
-alt Giỏ hàng rỗng (EF-02)
-  UI --> Customer: Không cho checkout, yêu cầu chọn món
+Customer -> UI: Mở giỏ và chọn Thanh toán
+alt Giỏ rỗng (EF-02)
+  UI --> Customer: Vô hiệu hóa checkout; yêu cầu chọn món
 else Giỏ có sản phẩm
   UI -> UI: Kiểm tra phiên đăng nhập
   opt Chưa đăng nhập (AF-01)
     UI --> Customer: Yêu cầu đăng nhập
-    Customer -> UI: Đăng nhập hợp lệ
+    Customer -> UI: Đăng nhập thành công
   end
-  UI --> Customer: Hiển thị tổng tiền, Ví/Thẻ\n(coupon/điểm nếu áp dụng)
-  opt Thay đổi giỏ / coupon / điểm (AF-02, AF-04, AF-05)
+  UI --> Customer: Hiển thị đơn tạm tính và lựa chọn Ví/Thẻ
+  opt Sửa giỏ / áp mã / dùng điểm (AF-02, AF-04, AF-05)
     Customer -> UI: Điều chỉnh lựa chọn
-    UI -> UI: Cập nhật tổng tạm tính\n(server xác minh lại khi tạo đơn)
+    UI -> UI: Tính lại tổng tạm tính
   end
-  Customer -> UI: Chọn EWALLET hoặc CARD, xác nhận
+  Customer -> UI: Chọn EWALLET hoặc CARD; xác nhận
 
   == Tạo đơn PENDING (UC-11 / FR-07) ==
-  UI -> API: POST /orders (Bearer JWT, cart, tùy chọn)
-  API -> API: Xác thực JWT; validate sản phẩm, size, topping, số lượng
-  alt JWT không hợp lệ / hết hạn (EF-01)
+  UI -> API: POST /orders (Bearer JWT, giỏ, tùy chọn)
+  API -> API: Xác thực JWT và kiểm tra dữ liệu
+  alt JWT thiếu, sai, hết hạn (EF-01)
     API --> UI: 401 Unauthorized
-    UI --> Customer: Đăng nhập lại; giữ giỏ hàng
+    UI --> Customer: Yêu cầu đăng nhập lại; giữ giỏ
   else Dữ liệu không hợp lệ (EF-03)
-    API --> UI: 400 Bad Request
-    UI --> Customer: Thông báo lỗi; sửa giỏ hàng
+    API --> UI: Lỗi validation
+    UI --> Customer: Sửa thông tin giỏ
   else Dữ liệu hợp lệ
-    API -> DB: BEGIN TRANSACTION\nTính lại giá và kiểm tra tồn kho/nguyên liệu
-    DB --> API: Giá và kết quả kiểm tra
-    alt Thiếu tồn kho / xung đột (EF-04)
+    API -> DB: BEGIN; tính lại giá từ DB
+    API -> DB: Kiểm tra và trừ tồn kho nguyên tử có điều kiện
+    alt Thiếu tồn kho / tranh chấp (EF-04)
       API -> DB: ROLLBACK
-      API --> UI: Từ chối tạo đơn (không lưu đơn dở dang)
-      UI --> Customer: Thông báo hết hàng; giữ giỏ hàng
+      API --> UI: Không tạo đơn dở dang
+      UI --> Customer: Báo thiếu hàng; giữ giỏ
     else Đủ tồn kho
-      API -> DB: Cập nhật tồn kho có điều kiện\nTạo Order PENDING và mã đơn duy nhất
-      API -> DB: COMMIT
-      DB --> API: orderId, orderCode, totalAmount, PENDING
-      API --> UI: 201 Created - Order PENDING
+      API -> DB: Ghi Order PENDING, mã đơn duy nhất; COMMIT
+      DB --> API: orderId, orderCode, totalAmount
+      API --> UI: 201 Created, PENDING
 
-      == Thanh toán mô phỏng (UC-13 / FR-08) ==
-      UI -> API: POST /payments\n(Bearer JWT, orderId, paymentMethod, Idempotency-Key)
-      API -> API: Kiểm tra JWT, quyền sở hữu đơn,\ntrạng thái và dữ liệu thanh toán
-      API -> DB: Tra cứu Idempotency-Key (UC-14)
-      DB --> API: Kết quả tra cứu
-      alt Cùng khóa, cùng đơn - đã ghi nhận (AF-06)
-        API --> UI: Trả kết quả Payment đã lưu (không xử lý lại)
-      else Khóa thuộc đơn khác (EF-06)
-        API --> UI: Từ chối khóa không hợp lệ
-        UI --> Customer: Thông báo lỗi; không thanh toán trùng
-      else Khóa mới
-        API -> MPS: Mô phỏng thanh toán EWALLET / CARD
-        MPS --> API: SUCCESS hoặc FAILED
+      == Thanh toán và chống lặp (UC-13, UC-14 / FR-08) ==
+      UI -> API: POST /payments (JWT, orderId, paymentMethod,\nIdempotency-Key: UUID v4)
+      API -> API: Xác thực JWT, quyền sở hữu và trạng thái đơn
+      API -> API: Chuẩn hóa fingerprint: orderId, method, amount
+      API -> DB: INSERT Payment(key UNIQUE, fingerprint, PROCESSING)\nON CONFLICT DO NOTHING RETURNING id
+      note right of DB
+        UNIQUE(key) là ràng buộc DB.
+        INSERT nguyên tử phân xử hai request đến cùng lúc.
+        Không giữ transaction mở khi gọi Mock Payment.
+      end note
+
+      alt INSERT thành công: khóa mới thuộc request này
+        DB --> API: Payment PROCESSING mới được giữ quyền xử lý
+        API -> MPS: Mô phỏng Ví/Thẻ (chỉ request thắng được gọi)
+        MPS --> API: SUCCESS / FAILED
+        API -> DB: BEGIN; khóa Order/Payment và kiểm tra trạng thái
         alt SUCCESS
-          API -> DB: BEGIN TRANSACTION
-          API -> DB: Lưu Payment SUCCESS, Order PAID\n(cộng điểm nếu FR-18 áp dụng)
+          API -> DB: Payment SUCCESS; Order PENDING -> PAID\nCộng điểm nếu áp dụng, tối đa một lần
           API -> DB: COMMIT
-          DB --> API: Đơn PAID, giao dịch đã ghi nhận
-          API --> UI: Kết quả thành công; mã đơn, tổng tiền
+          DB --> API: PAID và Payment đã lưu
+          API --> UI: PAID, mã đơn, tổng thanh toán
         else FAILED (EF-05)
-          API -> DB: BEGIN TRANSACTION
-          API -> DB: Lưu Payment FAILED, Order PAYMENT_FAILED\nHoàn tồn kho / điểm đã dùng (nếu có)
+          API -> DB: Payment FAILED; Order -> PAYMENT_FAILED\nHoàn kho/điểm đã dùng đúng một lần
           API -> DB: COMMIT
-          DB --> API: Đơn PAYMENT_FAILED
-          API --> UI: Thông báo thanh toán thất bại
+          DB --> API: PAYMENT_FAILED và Payment đã lưu
+          API --> UI: Thông báo thất bại
+        end
+      else INSERT bị xung đột UNIQUE: khóa đã có
+        DB --> API: Không tạo bản ghi mới
+        API -> DB: SELECT Payment theo Idempotency-Key
+        DB --> API: orderId, fingerprint, trạng thái, kết quả
+        alt Khác orderId hoặc fingerprint (EF-06)
+          API --> UI: 409 Conflict; không gọi Mock
+        else Cùng đơn và cùng nội dung
+          alt Đã SUCCESS hoặc FAILED (AF-06)
+            API --> UI: Trả lại kết quả đã lưu; không xử lý lại
+          else Đang PROCESSING
+            API --> UI: 202 Processing / yêu cầu kiểm tra lại
+            note over UI,API
+              Không gọi Mock lần nữa.
+              Nếu PROCESSING kéo dài: đối soát/phục hồi có kiểm soát.
+            end note
+          end
         end
       end
 
       == Hiển thị kết quả (UC-17, UC-18) ==
-      alt Kết quả cuối cùng là PAID
+      alt Trạng thái cuối cùng PAID
         UI -> UI: Xóa giỏ hàng phía client
-        UI --> Customer: Xác nhận PAID, mã đơn, tổng tiền\nCó thể xem lịch sử (UC-21 / FR-11)
-      else Kết quả PAYMENT_FAILED
+        UI --> Customer: Hiển thị mã đơn, PAID, tổng tiền\nCó thể xem lịch sử (UC-21)
+      else Trạng thái cuối cùng PAYMENT_FAILED
         UI -> UI: Giữ nguyên giỏ hàng (NFR-09)
-        UI --> Customer: Báo lỗi; Thử lại / Quay lại giỏ
-      else Kết quả chưa xác định / lỗi phản hồi (EF-08)
-        UI --> Customer: Không tự kết luận thành công/thất bại\nCần tra cứu trạng thái trước khi thử lại
+        UI --> Customer: Thử lại / Quay lại giỏ
+      else Đang PROCESSING hoặc mất phản hồi (EF-08)
+        UI --> Customer: Chưa kết luận thành công/thất bại\nTra cứu trạng thái trước khi thực hiện lại
         note over UI,API
-          Giới hạn hiện trạng: xác nhận lại toàn bộ checkout
-          có thể tạo orderId và Idempotency-Key mới.
-          Chống lặp chỉ bảo đảm cho cùng khóa và cùng đơn.
-          SRS AC-09.3 và mã nguồn cần thống nhất cách thử lại.
+          Cùng khóa + cùng đơn chỉ bảo vệ Payment.
+          Gửi lại POST /orders rồi dùng khóa mới có thể tạo đơn mới.
+          Cần cơ chế idempotency riêng cho tạo đơn nếu muốn chặn điều đó.
         end note
       end
     end
@@ -107,8 +122,8 @@ else Giỏ có sản phẩm
 end
 
 note over API,DB
-  Mọi lỗi trong transaction phải hoàn tác thao tác dở dang.
-  SRS NFR-08 mô tả optimistic locking; báo cáo hiện thực
-  mô tả cập nhật tồn kho nguyên tử có điều kiện.
+  Đây là thiết kế bổ sung cho NFR-08, cần triển khai và kiểm thử.
+  SRS nói Optimistic Locking; báo cáo code mô tả cập nhật kho có điều kiện.
+  AC-09.3 và hành vi retry trên UI vẫn cần thống nhất với code.
 end note
 @enduml

@@ -1,88 +1,37 @@
-@startuml BrewLite_Checkout_Payment
-' Task 1.3 - Sơ đồ use-case tập trung, bố cục gọn cho báo cáo
-' Đồng bộ mã UC với use-case-overall.puml; không thay đổi nghiệp vụ.
+@startuml
 left to right direction
-skinparam defaultFontName Arial
 skinparam shadowing false
-skinparam packageStyle rectangle
-skinparam roundcorner 10
-skinparam linetype ortho
 skinparam actorStyle stickman
-skinparam ArrowThickness 1
-skinparam nodesep 48
-skinparam ranksep 58
-skinparam padding 8
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam defaultFontName Arial
 
-skinparam usecase {
-    BackgroundColor White
-    BorderColor #444444
-    FontColor #222222
+actor "Khách đã đăng nhập\n(Member Customer)" as Member
+rectangle "HỆ THỐNG BREWLITE - ĐẶT & THANH TOÁN" {
+  usecase "UC-06\nXem & quản lý giỏ hàng" as UC06
+  usecase "UC-09\nĐăng nhập & Xác thực JWT" as UC09
+  usecase "UC-11\nTạo đơn hàng (Checkout)" as UC11
+  usecase "UC-12\nKiểm tra dữ liệu & tồn kho" as UC12
+  usecase "UC-13\nThực hiện thanh toán mô phỏng" as UC13
+  usecase "UC-14\nXử lý giao dịch thanh toán\n(Idempotency-Key)" as UC14
+  usecase "UC-15\nÁp dụng mã khuyến mãi" as UC15
+  usecase "UC-16\nTích lũy & Sử dụng điểm thưởng" as UC16
+  usecase "UC-17\nThanh toán thất bại & bảo toàn giỏ" as UC17
+  usecase "UC-18\nXem xác nhận đơn hàng (PAID)" as UC18
+  usecase "UC-21\nXem lịch sử đơn hàng cá nhân" as UC21
+
+  UC11 ..> UC09 : <<include>>\n(yêu cầu xác thực)
+  UC11 ..> UC12 : <<include>>
+  UC13 ..> UC14 : <<include>>
+  UC13 ..> UC18 : <<include>>\n(khi thanh toán thành công)
+  UC15 ..> UC11 : <<extend>>\n(khi áp voucher)
+  UC16 ..> UC13 : <<extend>>\n(khi dùng điểm)
+  UC17 ..> UC13 : <<extend>>\n(khi thanh toán lỗi)
 }
-skinparam rectangle {
-    BackgroundColor #FAFAFA
-    BorderColor #555555
-}
-skinparam actor {
-    FontColor #222222
-    BorderColor #444444
-}
-
-title BREWLITE - USE CASE ĐẶT VÀ THANH TOÁN ĐƠN HÀNG (TASK 1.3)
-
-actor "Khách hàng đã đăng nhập\n(Member Customer)" as Member
-
-rectangle "HỆ THỐNG BREWLITE - PHẠM VI ĐẶT HÀNG & THANH TOÁN" {
-    ' Nhóm chuẩn bị đơn
-    usecase "UC-06\nQuản lý giỏ hàng" as Cart
-    usecase "UC-11\nTạo đơn hàng\n(Checkout)" as Checkout
-    usecase "UC-12\nKiểm tra dữ liệu\nvà tồn kho" as Validate
-    usecase "UC-15\nÁp dụng mã\nkhuyến mãi" as Promo
-
-    ' Nhóm thanh toán
-    usecase "UC-13\nThanh toán mô phỏng\n(Ví / Thẻ)" as Pay
-    usecase "UC-14\nXử lý thanh toán\n(Idempotency-Key)" as Execute
-    usecase "UC-16\nĐiểm thưởng\n(Loyalty)" as Loyalty
-    usecase "UC-17\nXử lý thanh toán lỗi\nvà giữ giỏ hàng" as Failure
-
-    ' Nhóm hậu thanh toán
-    usecase "UC-18\nXem xác nhận\nđơn hàng" as Confirm
-    usecase "UC-21\nXem lịch sử\nđơn hàng" as History
-
-    ' Liên kết bố cục (ẩn, không thuộc mô hình UML)
-    Cart -[hidden]down-> Checkout
-    Checkout -[hidden]down-> Promo
-    Checkout -[hidden]right-> Pay
-    Validate -[hidden]down-> Execute
-    Pay -[hidden]down-> Loyalty
-    Loyalty -[hidden]down-> Failure
-    Pay -[hidden]right-> Confirm
-    Confirm -[hidden]down-> History
-}
-
 actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as Gateway
-
-' Tương tác tác nhân
-Member -- Cart
-Member -- Checkout
-Member -- Pay
-Member -- Confirm
-Member -- History
-Execute -- Gateway
-
-' Các quan hệ từ sơ đồ use-case tổng quát
-Checkout ..> Validate : <<include>>
-Pay ..> Execute : <<include>>
-Promo ..> Checkout : <<extend>>
-Loyalty ..> Pay : <<extend>>
-Failure ..> Pay : <<extend>>
-Confirm ..> Pay : <<extend>>\n[khi thành công]
-
-legend bottom
-  **Quy tắc chính**
-  - Đặt đơn: JWT hợp lệ, giỏ không rỗng, kiểm tra tồn kho; tạo PENDING.
-  - Thanh toán: dùng Idempotency-Key để chống xử lý lại cùng yêu cầu.
-  - Thành công: PAID, hiển thị mã đơn và xóa giỏ hàng.
-  - Thất bại: PAYMENT_FAILED, giữ nguyên giỏ hàng.
-  - Ví/Thẻ chỉ là mô phỏng; không giao dịch tiền thật.
-endlegend
+Member -- UC06
+Member -- UC11
+Member -- UC13
+Member -- UC21
+UC14 -- Gateway
 @enduml

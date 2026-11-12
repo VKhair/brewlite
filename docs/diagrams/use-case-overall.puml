@@ -16,7 +16,7 @@ actor "Khách đã đăng nhập\n(Member Customer)" as Member <<Primary>>
 actor "Nhân viên quầy\n(Barista / Staff)" as Staff <<Primary>>
 actor "Quản lý cửa hàng\n(Store Manager / Admin)" as Admin <<Primary>>
 
-actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as PaymentGateway <<Secondary / External System>>
+actor "VNPay Sandbox\n(External Payment System)" as PaymentGateway <<Secondary / External System>>
 actor "Hệ thống CI/CD & Giám sát\n(DevOps / Monitoring)" as SystemDevOps <<Secondary / System>>
 
 ' Quan hệ thừa kế giữa các Actor
@@ -54,7 +54,7 @@ rectangle "Hệ thống BrewLite (Next.js Web App & NestJS API)" {
     package "Phân hệ Đơn hàng & Thanh toán (Core MVP)" {
         usecase "UC-11: Tạo đơn hàng (Checkout)" as UC_CreateOrder
         usecase "UC-12: Kiểm tra dữ liệu & tồn kho\n(Transaction & Optimistic Locking)" as UC_ValidateOrder
-        usecase "UC-13: Thực hiện thanh toán mô phỏng\n(Ví điện tử / Thẻ ngân hàng)" as UC_ProcessPayment
+        usecase "UC-13: Thanh toán qua VNPay Sandbox" as UC_ProcessPayment
         usecase "UC-14: Xử lý giao dịch thanh toán\n(Idempotency-Key)" as UC_ExecutePayment
         usecase "UC-15: Áp dụng mã khuyến mãi\n(Promotion Discount)" as UC_ApplyPromotion
         usecase "UC-16: Tích lũy & Sử dụng điểm thưởng\n(Loyalty Program)" as UC_Loyalty
@@ -83,35 +83,36 @@ rectangle "Hệ thống BrewLite (Next.js Web App & NestJS API)" {
 ' ==========================================
 
 ' 1. Khách hàng chung (Customer: Guest + Member)
-Customer --> UC_ViewMenu
-Customer --> UC_ViewProductDetail
-Customer --> UC_ManageCart
+Customer -- UC_ViewMenu
+Customer -- UC_ViewProductDetail
+Customer -- UC_ManageCart
 
 ' 2. Khách vãng lai (Guest)
-Guest --> UC_Register
-Guest --> UC_Login
+Guest -- UC_Register
+Guest -- UC_Login
 
 ' 3. Khách đã đăng nhập (Member Customer)
-Member --> UC_Logout
-Member --> UC_CreateOrder
-Member --> UC_ProcessPayment
-Member --> UC_TrackOrder
-Member --> UC_OrderHistory
+Member -- UC_Logout
+Member -- UC_CreateOrder
+Member -- UC_ProcessPayment
+Member -- UC_TrackOrder
+Member -- UC_OrderConfirmation
+Member -- UC_OrderHistory
 
 ' 4. Nhân viên quầy (Barista / Staff)
-Staff --> UC_Login
-Staff --> UC_Logout
-Staff --> UC_StaffUpdateOrder
+Staff -- UC_Login
+Staff -- UC_Logout
+Staff -- UC_StaffUpdateOrder
 
 ' 5. Quản lý cửa hàng / Quản trị viên (Admin)
-Admin --> UC_Login
-Admin --> UC_Logout
-Admin --> UC_ManageProducts
-Admin --> UC_ViewReports
+Admin -- UC_Login
+Admin -- UC_Logout
+Admin -- UC_ManageProducts
+Admin -- UC_ViewReports
 
 ' 6. Tác nhân bên ngoài & Hệ thống
-UC_ExecutePayment --> PaymentGateway
-SystemDevOps --> UC_HealthCheck
+UC_ProcessPayment -- PaymentGateway
+SystemDevOps -- UC_HealthCheck
 
 ' ==========================================
 ' CÁC QUAN HỆ INCLUDE (BẮT BUỘC)
@@ -119,9 +120,9 @@ SystemDevOps --> UC_HealthCheck
 UC_ManageCart ..> UC_CalcTotal : <<include>>
 UC_AddToCart ..> UC_CalcTotal : <<include>>
 UC_CreateOrder ..> UC_ValidateOrder : <<include>>
-UC_CreateOrder ..> UC_Login : <<include>>\n(yêu cầu xác thực)
+UC_CreateOrder ..> UC_ProcessPayment : <<include>>
 UC_ProcessPayment ..> UC_ExecutePayment : <<include>>
-UC_ProcessPayment ..> UC_OrderConfirmation : <<include>>\n(khi thanh toán thành công)
+UC_OrderConfirmation .> UC_ProcessPayment : <<extend>>\n[khi thanh toán được xác minh thành công]
 
 ' ==========================================
 ' CÁC QUAN HỆ EXTEND (MỞ RỘNG CÓ ĐIỀU KIỆN)
@@ -138,10 +139,16 @@ UC_CancelOrder .> UC_TrackOrder : <<extend>>\n(khi đơn ở trạng thái PENDI
 ' GHI CHÚ BỔ TRỢ KIẾN TRÚC & NGHIỆP VỤ
 ' ==========================================
 note right of UC_ExecutePayment
-  Cổng thanh toán mô phỏng xử lý:
+  VNPay Sandbox xử lý:
   - Thành công: Chuyển đơn PENDING -> PAID
   - Thất bại: Chuyển đơn PAYMENT_FAILED
   - Bảo vệ giao dịch bằng Idempotency-Key (UUID v4)
+end note
+
+note right of UC_CreateOrder
+  Precondition: Member có JWT hợp lệ.
+  Nếu chưa xác thực, hoàn tất UC-09 rồi tiếp tục checkout;
+  đăng nhập không phải bước bắt buộc với phiên đã hợp lệ.
 end note
 
 note right of UC_StaffUpdateOrder

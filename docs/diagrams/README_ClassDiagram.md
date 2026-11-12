@@ -61,7 +61,8 @@ Các thuộc tính chính:
 
 Các phương thức:
 - hasStock(): Kiểm tra số lượng tồn kho.
-- decreaseStock(): Giảm số lượng tồn kho khi tạo đơn hàng thành công.
+- decreaseStock(): Giữ/trừ số lượng tồn kho khi đơn được tạo.
+- restoreStock(): Hoàn tồn kho đúng một lần khi thanh toán thất bại đã được xác minh.
 
 ### 3.3. Order
 
@@ -186,8 +187,7 @@ Sơ đồ sử dụng 6 enum để giới hạn các giá trị trạng thái v�
 - CANCELLED: Đã hủy.
 
 ### 5.3. PaymentMethod
-- EWALLET: Ví điện tử.
-- CARD: Thẻ thanh toán.
+- VNPAY: Thanh toán qua VNPay Sandbox; khách chọn nguồn tiền trên VNPay.
 
 ### 5.4. PaymentStatus
 - PENDING: Đang chờ xử lý.
@@ -220,7 +220,7 @@ Class Diagram được thiết kế để hỗ trợ các bước nghiệp vụ 
 - Payment lưu thông tin yêu cầu thanh toán.
 - Hệ thống kiểm tra Idempotency Key để tránh xử lý trùng yêu cầu.
 - Nếu khóa đã được ghi nhận, hệ thống trả lại kết quả thanh toán đã lưu.
-- Nếu là yêu cầu mới, hệ thống gọi Mock Payment Service để giả lập giao dịch.
+- Nếu là yêu cầu mới, hệ thống tạo yêu cầu thanh toán và chuyển khách sang VNPay Sandbox.
 
 ### 6.3. Cập nhật trạng thái đơn hàng
 

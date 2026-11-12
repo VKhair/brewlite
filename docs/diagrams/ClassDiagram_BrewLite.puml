@@ -66,6 +66,7 @@ class Product {
   --
   + hasStock(quantity): Boolean
   + decreaseStock(quantity): void
+  + restoreStock(quantity): void
 }
 
 class OrderItem {
@@ -129,8 +130,7 @@ enum OrderStatus {
 }
 
 enum PaymentMethod {
-  EWALLET
-  CARD
+  VNPAY
 }
 
 enum PaymentStatus {

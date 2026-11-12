@@ -96,7 +96,7 @@ else (Không)
 endif
 
 |Frontend|
-:Hiển thị giao diện chọn Phương thức thanh toán;
+:Hiển thị phương thức thanh toán VNPay;
 
 |Customer|
 :Chọn phương thức thanh toán;
@@ -106,20 +106,27 @@ repeat
     :Xác nhận thanh toán;
     
     |Frontend|
-    :Tạo và đính kèm Idempotency-Key mới (UUID v4);
+    :Tạo Idempotency-Key cho Payment attempt;
     :Gửi yêu cầu thanh toán;
     
     |Backend|
     :Kiểm tra Idempotency-Key để\nchống xử lý giao dịch trùng lặp;
-    :Chuyển tiếp yêu cầu đến Payment Gateway;
+    :Tạo yêu cầu đã ký và trả payment URL;
     
-    |Payment Gateway|
-    :Xử lý giao dịch thanh toán;
-    :Trả kết quả giao dịch;
+    |Customer|
+    :Chuyển sang VNPay Sandbox;
+    :Chọn nguồn tiền và xác nhận;
+
+    |VNPay Sandbox|
+    :Xử lý giao dịch;
+    :Gửi IPN có chữ ký đến Backend;
+
+    |Backend|
+    :Xác minh chữ ký, mã tham chiếu, số tiền và trạng thái;
     
     if (Thanh toán thành công?) then (Có)
         |Backend|
-        :Ghi nhận giao dịch thanh toán thành công;
+        :Ghi nhận Payment thành công;
         :Cập nhật trạng thái đơn hàng từ PENDING sang PAID;
         
         |Frontend|
@@ -132,8 +139,9 @@ repeat
         stop
     else (Không)
         |Backend|
-        :Ghi nhận giao dịch thanh toán thất bại;
+        :Ghi nhận Payment thất bại;
         :Cập nhật trạng thái đơn hàng thành PAYMENT_FAILED;
+        :Hoàn tồn kho đã giữ đúng một lần;
         
         |Frontend|
         :Giữ nguyên giỏ hàng;
@@ -143,7 +151,14 @@ repeat
         |Customer|
         if (Khách hàng chọn thử thanh toán lại?) then (Có)
             |Backend|
-            :Chuyển trạng thái đơn hàng\nfrung PAYMENT_FAILED về PENDING;
+            :Kiểm tra và giữ tồn kho lại trong transaction;
+            if (Đủ tồn kho?) then (Có)
+                :Chuyển PAYMENT_FAILED về PENDING;
+                :Tạo Payment attempt mới;
+            else (Không)
+                :Rollback và yêu cầu cập nhật giỏ;
+                detach
+            endif
         else (Không)
             :Quay về giỏ hàng;
             detach

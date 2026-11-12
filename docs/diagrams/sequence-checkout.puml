@@ -1,129 +1,98 @@
 @startuml
-' BrewLite - Task 2.2 / Task 1.3 / SRS
-' Thiết kế BỔ SUNG bảo vệ đồng thời cho UC-14, chưa xác nhận đã hiện thực trong code.
-' FR-07, FR-08 (AC-08.3), FR-09, FR-10; NFR-04, NFR-08, NFR-09.
+' BrewLite Task 2.2: checkout with VNPay Sandbox
+' Sandbox-only integration; production payment is out of scope.
 skinparam monochrome true
 skinparam shadowing false
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow false
 skinparam maxMessageSize 66
-skinparam ParticipantPadding 22
-skinparam BoxPadding 10
 hide footbox
-
 autonumber
-actor "Khách hàng\n(Member Customer)" as Customer
+
+actor "Khách hàng" as Customer
 participant "Next.js UI" as UI
 participant "NestJS API" as API
 database "PostgreSQL" as DB
-participant "Mock Payment Service\n(nội bộ PaymentsService)" as MPS
+participant "VNPay Sandbox" as VNP
 
-== Chuẩn bị và xác thực (UC-06, UC-09) ==
-Customer -> UI: Mở giỏ và chọn Thanh toán
-alt Giỏ rỗng (EF-02)
-  UI --> Customer: Vô hiệu hóa checkout; yêu cầu chọn món
-else Giỏ có sản phẩm
-  UI -> UI: Kiểm tra phiên đăng nhập
-  opt Chưa đăng nhập (AF-01)
-    UI --> Customer: Yêu cầu đăng nhập
-    Customer -> UI: Đăng nhập thành công
-  end
-  UI --> Customer: Hiển thị đơn tạm tính và lựa chọn Ví/Thẻ
-  opt Sửa giỏ / áp mã / dùng điểm (AF-02, AF-04, AF-05)
-    Customer -> UI: Điều chỉnh lựa chọn
-    UI -> UI: Tính lại tổng tạm tính
-  end
-  Customer -> UI: Chọn EWALLET hoặc CARD; xác nhận
+== Tạo đơn ==
+Customer -> UI: Checkout giỏ hàng
+UI -> API: POST /orders (JWT, cart)
+API -> API: Xác thực JWT, validate và tính lại giá
+API -> DB: BEGIN; kiểm tra/giữ tồn kho nguyên tử
+alt Dữ liệu sai hoặc thiếu tồn kho
+  API -> DB: ROLLBACK
+  API --> UI: Lỗi; không tạo đơn
+  UI --> Customer: Hiển thị lỗi, giữ giỏ
+else Hợp lệ
+  API -> DB: Ghi Order PENDING, OrderItems; COMMIT
+  API --> UI: orderId, orderCode, totalAmount
+end
 
-  == Tạo đơn PENDING (UC-11 / FR-07) ==
-  UI -> API: POST /orders (Bearer JWT, giỏ, tùy chọn)
-  API -> API: Xác thực JWT và kiểm tra dữ liệu
-  alt JWT thiếu, sai, hết hạn (EF-01)
-    API --> UI: 401 Unauthorized
-    UI --> Customer: Yêu cầu đăng nhập lại; giữ giỏ
-  else Dữ liệu không hợp lệ (EF-03)
-    API --> UI: Lỗi validation
-    UI --> Customer: Sửa thông tin giỏ
-  else Dữ liệu hợp lệ
-    API -> DB: BEGIN; tính lại giá từ DB
-    API -> DB: Kiểm tra và trừ tồn kho nguyên tử có điều kiện
-    alt Thiếu tồn kho / tranh chấp (EF-04)
-      API -> DB: ROLLBACK
-      API --> UI: Không tạo đơn dở dang
-      UI --> Customer: Báo thiếu hàng; giữ giỏ
-    else Đủ tồn kho
-      API -> DB: Ghi Order PENDING, mã đơn duy nhất; COMMIT
-      DB --> API: orderId, orderCode, totalAmount
-      API --> UI: 201 Created, PENDING
+== Khởi tạo thanh toán ==
+Customer -> UI: Chọn VNPay và xác nhận
+UI -> API: POST /payments (orderId, VNPAY, Idempotency-Key)
+API -> DB: Đọc đơn và kiểm tra chủ sở hữu/trạng thái
+API -> DB: Lưu Payment attempt + mã tham chiếu duy nhất
+API -> API: Ký request bằng secret phía server
+API --> UI: paymentUrl
+UI -> Customer: Chuyển hướng sang VNPay
+Customer -> VNP: Chọn nguồn tiền, xác nhận giao dịch sandbox
 
-      == Thanh toán và chống lặp (UC-13, UC-14 / FR-08) ==
-      UI -> API: POST /payments (JWT, orderId, paymentMethod,\nIdempotency-Key: UUID v4)
-      API -> API: Xác thực JWT, quyền sở hữu và trạng thái đơn
-      API -> API: Chuẩn hóa fingerprint: orderId, method, amount
-      API -> DB: INSERT Payment(key UNIQUE, fingerprint, PROCESSING)\nON CONFLICT DO NOTHING RETURNING id
-      note right of DB
-        UNIQUE(key) là ràng buộc DB.
-        INSERT nguyên tử phân xử hai request đến cùng lúc.
-        Không giữ transaction mở khi gọi Mock Payment.
-      end note
+== Thông báo và xác minh ==
+VNP -> API: IPN (mã tham chiếu, amount, response, chữ ký)
+API -> API: Xác minh chữ ký và đối chiếu đơn/amount/reference
+alt IPN không hợp lệ hoặc dữ liệu không khớp
+  API --> VNP: Từ chối/không cập nhật đơn
+else Giao dịch đã xử lý (duplicate IPN)
+  API -> DB: Đọc kết quả Payment đã lưu
+  API --> VNP: Trả phản hồi idempotent
+else VNPay xác nhận thành công
+  API -> DB: BEGIN; khóa đơn/payment; Payment SUCCESS, Order PAID; COMMIT
+  API --> VNP: Acknowledge
+else VNPay xác nhận thất bại
+  API -> DB: BEGIN; Payment FAILED, Order PAYMENT_FAILED
+  API -> DB: Hoàn tồn kho/điểm đúng một lần; COMMIT
+  API --> VNP: Acknowledge
+end
 
-      alt INSERT thành công: khóa mới thuộc request này
-        DB --> API: Payment PROCESSING mới được giữ quyền xử lý
-        API -> MPS: Mô phỏng Ví/Thẻ (chỉ request thắng được gọi)
-        MPS --> API: SUCCESS / FAILED
-        API -> DB: BEGIN; khóa Order/Payment và kiểm tra trạng thái
-        alt SUCCESS
-          API -> DB: Payment SUCCESS; Order PENDING -> PAID\nCộng điểm nếu áp dụng, tối đa một lần
-          API -> DB: COMMIT
-          DB --> API: PAID và Payment đã lưu
-          API --> UI: PAID, mã đơn, tổng thanh toán
-        else FAILED (EF-05)
-          API -> DB: Payment FAILED; Order -> PAYMENT_FAILED\nHoàn kho/điểm đã dùng đúng một lần
-          API -> DB: COMMIT
-          DB --> API: PAYMENT_FAILED và Payment đã lưu
-          API --> UI: Thông báo thất bại
-        end
-      else INSERT bị xung đột UNIQUE: khóa đã có
-        DB --> API: Không tạo bản ghi mới
-        API -> DB: SELECT Payment theo Idempotency-Key
-        DB --> API: orderId, fingerprint, trạng thái, kết quả
-        alt Khác orderId hoặc fingerprint (EF-06)
-          API --> UI: 409 Conflict; không gọi Mock
-        else Cùng đơn và cùng nội dung
-          alt Đã SUCCESS hoặc FAILED (AF-06)
-            API --> UI: Trả lại kết quả đã lưu; không xử lý lại
-          else Đang PROCESSING
-            API --> UI: 202 Processing / yêu cầu kiểm tra lại
-            note over UI,API
-              Không gọi Mock lần nữa.
-              Nếu PROCESSING kéo dài: đối soát/phục hồi có kiểm soát.
-            end note
-          end
-        end
-      end
+== Quay về và hiển thị trạng thái ==
+VNP --> Customer: Return URL (chỉ điều hướng, không phải xác nhận)
+Customer -> UI: Mở trang kết quả
+UI -> API: GET /orders/{id} hoặc GET /payments/{ref}
+API -> DB: Đọc trạng thái đã xác minh
+DB --> API: PENDING / PAID / PAYMENT_FAILED
+API --> UI: Trạng thái authoritative
+alt PAID
+  UI -> UI: Xóa giỏ hàng
+  UI --> Customer: Hiển thị xác nhận PAID
+else PAYMENT_FAILED
+  UI -> UI: Giữ giỏ hàng
+  UI --> Customer: Thử lại cùng đơn hoặc quay lại giỏ
+else Chưa có kết quả cuối
+  UI --> Customer: Đang xác minh; chưa kết luận thất bại
+end
 
-      == Hiển thị kết quả (UC-17, UC-18) ==
-      alt Trạng thái cuối cùng PAID
-        UI -> UI: Xóa giỏ hàng phía client
-        UI --> Customer: Hiển thị mã đơn, PAID, tổng tiền\nCó thể xem lịch sử (UC-21)
-      else Trạng thái cuối cùng PAYMENT_FAILED
-        UI -> UI: Giữ nguyên giỏ hàng (NFR-09)
-        UI --> Customer: Thử lại / Quay lại giỏ
-      else Đang PROCESSING hoặc mất phản hồi (EF-08)
-        UI --> Customer: Chưa kết luận thành công/thất bại\nTra cứu trạng thái trước khi thực hiện lại
-        note over UI,API
-          Cùng khóa + cùng đơn chỉ bảo vệ Payment.
-          Gửi lại POST /orders rồi dùng khóa mới có thể tạo đơn mới.
-          Cần cơ chế idempotency riêng cho tạo đơn nếu muốn chặn điều đó.
-        end note
-      end
-    end
+== Thử lại sau thất bại đã xác nhận ==
+opt Khách chọn thử lại trên cùng đơn
+  Customer -> UI: Thử lại thanh toán
+  UI -> API: POST /orders/{id}/retry (JWT)
+  API -> DB: BEGIN; kiểm tra/giữ tồn kho lại
+  alt Đủ tồn kho
+    API -> DB: PAYMENT_FAILED -> PENDING; COMMIT
+    API --> UI: Cho phép payment attempt mới
+    UI -> API: POST /payments (cùng orderId, Idempotency-Key mới)
+    API -> VNP: Tạo giao dịch VNPay mới, ref mới
+  else Không đủ tồn kho
+    API -> DB: ROLLBACK
+    API --> UI: Yêu cầu cập nhật giỏ hàng
   end
 end
 
-note over API,DB
-  Đây là thiết kế bổ sung cho NFR-08, cần triển khai và kiểm thử.
-  SRS nói Optimistic Locking; báo cáo code mô tả cập nhật kho có điều kiện.
-  AC-09.3 và hành vi retry trên UI vẫn cần thống nhất với code.
+note over UI,API
+  Mất phản hồi trong cùng attempt: gửi lại với cùng Idempotency-Key
+  và đối soát trạng thái; không tạo giao dịch mới.
+  Attempt mới sau thất bại đã xác nhận: cùng orderId,
+  khóa idempotency và mã tham chiếu mới.
 end note
 @enduml

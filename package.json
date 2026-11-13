@@ -1,0 +1,29 @@
+{
+  "name": "brewlite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ứng dụng đặt đồ uống mobile-first/PWA. Stack mục tiêu: Next.js, NestJS, PostgreSQL và Docker.",
+  "homepage": "https://github.com/VKhair/brewlite#readme",
+  "bugs": {
+    "url": "https://github.com/VKhair/brewlite/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VKhair/brewlite.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "workspaces": [
+    "apps/*"
+  ],
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  }
+}

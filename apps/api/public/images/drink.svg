@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <rect width="400" height="400" rx="32" fill="#f5eadb"/>
+  <path d="M125 110h150l-20 210H145z" fill="#945e39"/>
+  <path d="M120 105h160v24H120z" fill="#36281f"/>
+  <path d="M215 60h12v60h-12z" fill="#36281f"/>
+  <circle cx="200" cy="216" r="42" fill="#f5eadb"/>
+  <text x="200" y="223" font-family="sans-serif" font-size="20" text-anchor="middle" fill="#36281f">BrewLite</text>
+</svg>

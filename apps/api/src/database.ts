@@ -1,32 +1,24 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { Pool, QueryResult, QueryResultRow } from 'pg';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Prisma, PrismaClient } from '@prisma/client';
 
-export interface Queryable {
-  query<R extends QueryResultRow = any>(text: string, values?: any[]): Promise<QueryResult<R>>;
-}
+export type DbTransaction = Prisma.TransactionClient;
 
 @Injectable()
-export class Database extends Pool implements OnModuleDestroy {
+export class Database extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
-    super({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
-    this.on('error', () => console.error('Idle database connection error'));
+    super();
   }
+  async onModuleInit() { await this.$connect(); }
+  async onModuleDestroy() { await this.$disconnect(); }
 
-  async onModuleDestroy() { await this.end(); }
-
-  async transaction<T>(work: (client: Queryable) => Promise<T>): Promise<T> {
-    const client = await this.connect();
-    let discard = false;
-    try {
-      await client.query('BEGIN');
-      const result = await work(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      try { await client.query('ROLLBACK'); }
-      catch { discard = true; }
-      throw error;
-    } finally { client.release(discard); }
+  async transaction<T>(work: (tx: DbTransaction) => Promise<T>): Promise<T> {
+    // Serializable isolation prevents concurrent checkout/payment write skew.
+    // P2034 is exposed as a 409 conflict by ApiErrorFilter; clients may retry.
+    return this.$transaction(work, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 5000,
+      timeout: 10000,
+    });
   }
 }

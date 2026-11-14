@@ -14,10 +14,8 @@ import { createValidationPipe } from './validation';
 @Module({
   imports: [JwtModule.registerAsync({ useFactory: jwtOptions })],
   controllers: [AppController, ProductsController, AuthController, OrdersController, PaymentsController],
-  providers: [
-    AppService, Database, ProductsService, AuthService, JwtGuard, OrdersService, PaymentsService,
+  providers: [AppService, Database, ProductsService, AuthService, JwtGuard, OrdersService, PaymentsService,
     { provide: APP_PIPE, useFactory: createValidationPipe },
-    { provide: APP_FILTER, useClass: ApiErrorFilter },
-  ],
+    { provide: APP_FILTER, useClass: ApiErrorFilter }],
 })
 export class AppModule {}

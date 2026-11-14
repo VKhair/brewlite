@@ -14,11 +14,12 @@ export class PaymentsService {
 
   async pay(userId: string, key: string, dto: PaymentDto) {
     return this.db.transaction(async client => {
-      // Serializes a user's keys even when the same key targets two different orders.
-      await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
-      const previous = (await client.query('SELECT * FROM payments WHERE user_id = $1 AND idempotency_key = $2', [userId, key])).rows[0];
+      // Serializable transaction plus unique (userId, idempotencyKey) protects duplicates.
+      const previous = await client.payment.findUnique({
+        where: { userId_idempotencyKey: { userId, idempotencyKey: key } },
+      });
       if (previous) {
-        if (previous.order_id !== dto.orderId || previous.payment_method !== dto.paymentMethod || previous.mock_outcome !== dto.mockOutcome) {
+        if (previous.orderId !== dto.orderId || previous.paymentMethod !== dto.paymentMethod || previous.mockOutcome !== dto.mockOutcome) {
           throw new ConflictException({ code: 'IDEMPOTENCY_CONFLICT', message: 'Idempotency-Key was used for a different payment request' });
         }
         return previous.response;
@@ -42,10 +43,9 @@ export class PaymentsService {
         totalAmount: order.totalAmount, status: order.status, paymentStatus: success ? 'SUCCESS' : 'FAILED',
         cartAction: success ? 'CLEAR' : 'KEEP',
         message: success ? 'Đặt hàng thành công. Mời tới quầy lấy nước.' : 'Thanh toán thất bại. Vui lòng thử lại.' };
-      await client.query(`INSERT INTO payments (id, user_id, order_id, idempotency_key, payment_method,
-        mock_outcome, amount, status, response) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
-      [paymentId, userId, order.orderId, key, dto.paymentMethod, dto.mockOutcome,
-        order.totalAmount, response.paymentStatus, JSON.stringify(response)]);
+      await client.payment.create({ data: { id: paymentId, userId, orderId: order.orderId,
+        idempotencyKey: key, paymentMethod: dto.paymentMethod, mockOutcome: dto.mockOutcome,
+        amount: order.totalAmount, status: response.paymentStatus, response } });
       return response;
     });
   }

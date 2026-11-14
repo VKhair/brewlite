@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String           @id @db.Uuid
+  name        String
+  description String           @default("")
+  basePrice   Int              @map("base_price")
+  imageUrl    String           @map("image_url")
+  category    String
+  isAvailable Boolean          @default(true) @map("is_available")
+  stock       Int              @default(100)
+  sizes       ProductSize[]
+  toppings    ProductTopping[]
+  @@map("products")
+}
+
+model ProductSize {
+  id         String  @id @db.Uuid
+  productId  String  @map("product_id") @db.Uuid
+  name       String
+  priceDelta Int     @default(0) @map("price_delta")
+  isDefault  Boolean @default(false) @map("is_default")
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@unique([productId, name])
+  @@map("product_sizes")
+}
+
+model Topping {
+  id          String           @id @db.Uuid
+  name        String
+  price       Int
+  isAvailable Boolean          @default(true) @map("is_available")
+  products    ProductTopping[]
+  @@map("toppings")
+}
+
+model ProductTopping {
+  productId String @map("product_id") @db.Uuid
+  toppingId String @map("topping_id") @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  topping   Topping @relation(fields: [toppingId], references: [id], onDelete: Cascade)
+  @@id([productId, toppingId])
+  @@map("product_toppings")
+}
+
+model User {
+  id           String               @id @db.Uuid
+  email        String               @unique
+  fullName     String               @map("full_name")
+  phone        String?
+  passwordHash String               @map("password_hash")
+  role         String               @default("CUSTOMER")
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  orders       Order[]
+  payments     Payment[]
+  activities   OrderStatusHistory[]
+  @@map("users")
+}
+
+model Order {
+  id          String               @id @db.Uuid
+  orderCode   String               @unique @map("order_code")
+  userId      String               @map("user_id") @db.Uuid
+  status      String               @default("PENDING")
+  totalAmount Int                  @map("total_amount")
+  items       Json
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User                 @relation(fields: [userId], references: [id])
+  history     OrderStatusHistory[]
+  payments    Payment[]
+  @@index([userId, createdAt, id])
+  @@map("orders")
+}
+
+model OrderStatusHistory {
+  id         String   @id @db.Uuid
+  sequence   BigInt   @unique @default(autoincrement())
+  orderId    String   @map("order_id") @db.Uuid
+  fromStatus String?  @map("from_status")
+  toStatus   String   @map("to_status")
+  actorId    String   @map("actor_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  order      Order    @relation(fields: [orderId], references: [id])
+  actor      User     @relation(fields: [actorId], references: [id])
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+model Payment {
+  id             String   @id @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  orderId        String   @map("order_id") @db.Uuid
+  idempotencyKey String   @map("idempotency_key") @db.Uuid
+  paymentMethod  String   @map("payment_method")
+  mockOutcome    String   @map("mock_outcome")
+  amount         Int
+  status         String
+  response       Json
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user           User     @relation(fields: [userId], references: [id])
+  order          Order    @relation(fields: [orderId], references: [id])
+  @@unique([userId, idempotencyKey])
+  @@index([orderId])
+  @@map("payments")
+}

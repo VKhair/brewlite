@@ -1,10 +1,10 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
-const databaseConflicts = new Set(['23503', '23505', '23514', '23P01']);
-const concurrencyErrors = new Set(['40001', '40P01', '55P03']);
+const databaseConflicts = new Set(['23503', '23505', '23514', '23P01', 'P2002', 'P2003', 'P2011', 'P2014']);
+const concurrencyErrors = new Set(['40001', '40P01', '55P03', 'P2034']);
 const unavailableErrors = new Set(['ECONNREFUSED', 'ECONNRESET', 'EPIPE', 'ETIMEDOUT',
-  'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', '53300', '57P01', '57P02', '57P03']);
+  'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', '53300', '57P01', '57P02', '57P03', 'P1000', 'P1001', 'P1002', 'P1017']);
 
 @Catch()
 export class ApiErrorFilter implements ExceptionFilter {

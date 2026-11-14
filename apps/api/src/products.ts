@@ -1,5 +1,6 @@
-import { Controller, Get, Injectable, NotFoundException, Param, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Injectable, NotFoundException, Param } from '@nestjs/common';
 import { Database } from './database';
+import { uuidParam } from './validation';
 
 const fields = `id, name, description, base_price AS "basePrice",
   image_url AS "imageUrl", category, is_available AS "isAvailable"`;
@@ -24,7 +25,7 @@ export class ProductsService {
          FROM toppings t JOIN product_toppings pt ON pt.topping_id = t.id
          WHERE pt.product_id = p.id) t), '[]'::json) AS toppings
       FROM products p WHERE id = $1 AND is_available = true`, [id]);
-    if (!result.rows[0]) throw new NotFoundException('Product not found');
+    if (!result.rows[0]) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'Product not found' });
     return result.rows[0];
   }
 }
@@ -37,7 +38,7 @@ export class ProductsController {
   findAll() { return this.products.findAll(); }
 
   @Get(':id')
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
+  findOne(@Param('id', uuidParam()) id: string) {
     return this.products.findOne(id);
   }
 }

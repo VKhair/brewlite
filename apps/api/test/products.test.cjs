@@ -7,17 +7,20 @@ const { PGlite } = require('@electric-sql/pglite');
 const { Test } = require('@nestjs/testing');
 const { AppModule } = require('../dist/app.module');
 const { Database } = require('../dist/database');
+const { configureHttp } = require('../dist/http');
 
 let db, app, base;
 const id = '10000000-0000-4000-8000-000000000001';
 before(async () => {
+  process.env.JWT_SECRET = 'products-test-secret-at-least-32-bytes-long';
   db = new PGlite();
   for (const file of ['schema.sql', 'seed.sql', 'schema.sql', 'seed.sql']) {
     await db.exec(readFileSync(resolve(__dirname, '../db', file), 'utf8'));
   }
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(Database).useValue({ query: (sql, params) => db.query(sql, params) }).compile();
-  app = module.createNestApplication({ logger: false });
+  app = module.createNestApplication({ logger: false, bodyParser: false });
+  configureHttp(app);
   await app.listen(0, '127.0.0.1');
   base = await app.getUrl();
 });

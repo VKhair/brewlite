@@ -1,10 +1,14 @@
 # BrewLite Products API
 
+Task 5.1 (Auth/JWT, orders, mock payments, status/history): [setup, API contract and smoke test](../../docs/task-5.1.md).
+
+Backend validation and error responses: [error contract, field details and tests](../../docs/backend-errors.md).
+
 NestJS + PostgreSQL, Node.js >= 22. Run commands from `apps/api`.
 
 ## Setup
 
-Copy the repository `.env.example` to `.env` and set `DATABASE_URL` to a running PostgreSQL database. The API and database scripts load the repository `.env` automatically; existing environment variables take precedence.
+Copy the repository `.env.example` to `.env`, set `DATABASE_URL` to a running PostgreSQL database and set `JWT_SECRET` to a random secret of at least 32 bytes. The API and database scripts load the repository `.env` automatically; existing environment variables take precedence.
 
 ```sh
 npm ci

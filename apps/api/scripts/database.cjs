@@ -12,7 +12,10 @@ async function main() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   try {
     await client.connect();
-    await client.query(readFileSync(resolve(__dirname, '../db', file), 'utf8'));
+    const files = file === 'schema.sql' ? ['schema.sql', '002-commerce.sql'] : [file];
+    for (const sqlFile of files) {
+      await client.query(readFileSync(resolve(__dirname, '../db', sqlFile), 'utf8'));
+    }
     console.log(`${file} completed`);
   } finally { await client.end(); }
 }

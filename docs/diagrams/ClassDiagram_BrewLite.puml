@@ -1,0 +1,169 @@
+@startuml BrewLite
+title BREWLITE - DOMAIN CLASS DIAGRAM\nTask 2.3 - Domain Model
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam ArrowColor #526579
+skinparam class {
+  BackgroundColor #f8fbff
+  BorderColor #4776a8
+  HeaderBackgroundColor #dcebfa
+}
+skinparam enum {
+  BackgroundColor #f8fbff
+  BorderColor #4776a8
+}
+
+' ===================== CLASSES =====================
+class User {
+  + id: UUID
+  + fullName: String
+  + email: String {unique}
+  + passwordHash: String
+  + phone: String
+  + role: UserRole
+  + loyaltyPoints: Integer
+  + createdAt: DateTime
+  --
+  + addLoyaltyPoints(points): void
+  + useLoyaltyPoints(points): Boolean
+}
+
+class Order {
+  + id: UUID
+  + orderCode: String {unique}
+  + subtotalAmount: Decimal
+  + promotionDiscount: Decimal
+  + loyaltyDiscount: Decimal
+  + totalAmount: Decimal
+  + status: OrderStatus
+  + createdAt: DateTime
+  + updatedAt: DateTime
+  --
+  + calculateTotal(): Decimal
+  + changeStatus(status): void
+  + canBeCancelled(): Boolean
+}
+
+class LoyaltyTransaction {
+  + id: UUID
+  + points: Integer
+  + type: LoyaltyTransactionType
+  + description: String
+  + createdAt: DateTime
+}
+
+class Product {
+  + id: UUID
+  + name: String
+  + description: String
+  + basePrice: Decimal
+  + imageUrl: String
+  + category: String
+  + stock: Integer
+  + isAvailable: Boolean
+  --
+  + hasStock(quantity): Boolean
+  + decreaseStock(quantity): void
+  + restoreStock(quantity): void
+}
+
+class OrderItem {
+  + id: UUID
+  + productName: String
+  + size: String
+  + toppingNames: String[*]
+  + note: String
+  + quantity: Integer
+  + unitPrice: Decimal
+  + subtotal: Decimal
+  --
+  + calculateSubtotal(): Decimal
+}
+
+class Payment {
+  + id: UUID
+  + amount: Decimal
+  + paymentMethod: PaymentMethod
+  + status: PaymentStatus
+  + idempotencyKey: UUID {unique}
+  + gatewayTransactionId: String
+  + failureReason: String
+  + createdAt: DateTime
+  + paidAt: DateTime
+  --
+  + markSuccess(transactionId): void
+  + markFailed(reason): void
+}
+
+class Promotion {
+  + id: UUID
+  + code: String {unique}
+  + type: PromotionType
+  + discountValue: Decimal
+  + minOrderAmount: Decimal
+  + startAt: DateTime
+  + endAt: DateTime
+  + usageLimit: Integer
+  + usedCount: Integer
+  + isActive: Boolean
+  --
+  + isValid(orderAmount): Boolean
+  + calculateDiscount(orderAmount): Decimal
+}
+
+' ===================== ENUMS =====================
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PAYMENT_FAILED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  VNPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum PromotionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum LoyaltyTransactionType {
+  EARN
+  REDEEM
+}
+
+' ===================== RELATIONSHIPS =====================
+User "1" -- "0..*" Order : places
+User "1" -- "0..*" LoyaltyTransaction : owns
+Product "1" -- "0..*" OrderItem : product
+Order "1" *-- "1..*" OrderItem : contains
+Order "1" *-- "0..*" Payment : payment attempts
+Order "0..1" -- "0..*" LoyaltyTransaction : related order
+Promotion "0..1" -- "0..*" Order : applied to
+
+' ===================== ENUM DEPENDENCIES =====================
+User ..> UserRole
+Order ..> OrderStatus
+Payment ..> PaymentMethod
+Payment ..> PaymentStatus
+Promotion ..> PromotionType
+LoyaltyTransaction ..> LoyaltyTransactionType
+
+@enduml

@@ -1,68 +1,132 @@
-# BrewLite Products API
+<p align="center">
+  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+</p>
 
-Task 5.1 (Auth/JWT, orders, mock payments, status/history): [setup, API contract and smoke test](../../docs/task-5.1.md).
+[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
+[circleci-url]: https://circleci.com/gh/nestjs/nest
 
-Backend validation and error responses: [error contract, field details and tests](../../docs/backend-errors.md).
+  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
+    <p align="center">
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
+<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
+<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
+<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
+<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
+  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
+    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
+  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+</p>
+  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
+  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-NestJS + PostgreSQL, Node.js >= 22. Run commands from `apps/api`.
+## Description
 
-## Setup
+[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-Copy the repository `.env.example` to `.env`, set `DATABASE_URL` to a running PostgreSQL database and set `JWT_SECRET` to a random secret of at least 32 bytes. The API and database scripts load the repository `.env` automatically; existing environment variables take precedence.
+## Project setup
 
-```sh
-npm ci
-npm run db:migrate
-npm run db:seed
-npm run build
-npm start
+```bash
+$ npm install
 ```
 
-Default address: `http://localhost:3001` (`API_PORT`). For development: `npm run dev`.
-On PowerShell with script execution disabled, use `npm.cmd` instead of `npm`.
+## Compile and run the project
 
-## Contract
+```bash
+# development
+$ npm run start
 
-- `GET /products`: 200, JSON array of available products, ordered by name then ID. No products: `[]`.
-- `GET /products/:id`: 200, product plus `sizes` and `toppings`. A nonexistent or unavailable product returns 404 with `message: "Product not found"`. Invalid UUID: 400.
-- Public endpoints; no login required. Prices are integer VND. `imageUrl` is relative to the API origin; sample products use a shared placeholder served at `/images/drink.svg`.
-- Size `priceDelta` is added to `basePrice`; M is the default. Topping `price` is an additional charge. Unavailable linked toppings remain in the detail response with `isAvailable: false` so the UI can disable them.
-- Search, pagination and category filtering are outside this Sprint 1 task.
+# watch mode
+$ npm run start:dev
 
-Example detail (`GET /products/10000000-0000-4000-8000-000000000001`):
-
-```json
-{
-  "id": "10000000-0000-4000-8000-000000000001",
-  "name": "Cà phê sữa",
-  "description": "Cà phê phin cùng sữa đặc.",
-  "basePrice": 29000,
-  "imageUrl": "/images/drink.svg",
-  "category": "Cà phê",
-  "isAvailable": true,
-  "sizes": [
-    { "id": "<uuid>", "name": "S", "priceDelta": -5000, "isDefault": false },
-    { "id": "<uuid>", "name": "M", "priceDelta": 0, "isDefault": true },
-    { "id": "<uuid>", "name": "L", "priceDelta": 10000, "isDefault": false }
-  ],
-  "toppings": [
-    { "id": "20000000-0000-4000-8000-000000000001", "name": "Thạch cà phê", "price": 5000, "isAvailable": true }
-  ]
-}
+# production mode
+$ npm run start:prod
 ```
 
-## Schema and seed
+## Run tests
 
-`db/schema.sql` creates products, per-product sizes, toppings and the product/topping join table with foreign keys, price checks and at most one default size per product. Negative size deltas support smaller sizes. Each SQL file runs in a transaction and can be rerun. Schema bootstrap uses `IF NOT EXISTS`; future schema changes need separate versioned migrations.
+```bash
+# unit tests
+$ npm run test
 
-`db/seed.sql` inserts four drinks (three available), S/M/L sizes and three toppings (one unavailable). Fixed IDs and `ON CONFLICT DO NOTHING` avoid duplicates and preserve existing data. Seed is for local/demo use and is never run automatically on API startup.
+# e2e tests
+$ npm run test:e2e
 
-## Verification
-
-```sh
-npm run lint
-npm test
-npm run build
+# test coverage
+$ npm run test:cov
 ```
 
-Tests exercise real HTTP routes against an isolated PGlite PostgreSQL engine: actual schema/seed SQL, rerun safety, availability filtering, sizes/toppings, empty data, 400/404 and constraints. They do not require an external database. Production PostgreSQL connectivity should also be smoke-tested using the setup commands above.
+## Deployment
+
+When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+
+If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+
+```bash
+$ npm install -g @nestjs/mau
+$ mau deploy
+```
+
+With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+
+## Observability
+
+In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+
+[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+
+- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
+- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
+- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
+- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
+- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
+- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
+- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
+- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+
+To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
+
+```bash
+$ npx @nestjs/observe link
+```
+
+It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
+
+Or do it by hand:
+
+```bash
+$ npm install @nestjs/observe
+```
+
+Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
+
+The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
+
+## Resources
+
+Check out a few resources that may come in handy when working with NestJS:
+
+- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
+- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
+- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
+- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
+- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
+- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
+- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
+- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
+- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+
+## Support
+
+Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+
+## Stay in touch
+
+- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
+- Website - [https://nestjs.com](https://nestjs.com/)
+- Twitter - [@nestframework](https://twitter.com/nestframework)
+
+## License
+
+Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

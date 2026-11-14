@@ -9,10 +9,9 @@ skinparam defaultFontName Arial
 actor "Khách đã đăng nhập\n(Member Customer)" as Member
 rectangle "HỆ THỐNG BREWLITE - ĐẶT & THANH TOÁN" {
   usecase "UC-06\nXem & quản lý giỏ hàng" as UC06
-  usecase "UC-09\nĐăng nhập & Xác thực JWT" as UC09
   usecase "UC-11\nTạo đơn hàng (Checkout)" as UC11
   usecase "UC-12\nKiểm tra dữ liệu & tồn kho" as UC12
-  usecase "UC-13\nThực hiện thanh toán mô phỏng" as UC13
+  usecase "UC-13\nThanh toán qua VNPay Sandbox" as UC13
   usecase "UC-14\nXử lý giao dịch thanh toán\n(Idempotency-Key)" as UC14
   usecase "UC-15\nÁp dụng mã khuyến mãi" as UC15
   usecase "UC-16\nTích lũy & Sử dụng điểm thưởng" as UC16
@@ -20,18 +19,26 @@ rectangle "HỆ THỐNG BREWLITE - ĐẶT & THANH TOÁN" {
   usecase "UC-18\nXem xác nhận đơn hàng (PAID)" as UC18
   usecase "UC-21\nXem lịch sử đơn hàng cá nhân" as UC21
 
-  UC11 ..> UC09 : <<include>>\n(yêu cầu xác thực)
   UC11 ..> UC12 : <<include>>
+  UC11 ..> UC13 : <<include>>
   UC13 ..> UC14 : <<include>>
-  UC13 ..> UC18 : <<include>>\n(khi thanh toán thành công)
+  UC18 .> UC13 : <<extend>>\n[khi thanh toán được xác minh thành công]
   UC15 ..> UC11 : <<extend>>\n(khi áp voucher)
   UC16 ..> UC13 : <<extend>>\n(khi dùng điểm)
   UC17 ..> UC13 : <<extend>>\n(khi thanh toán lỗi)
 }
-actor "Cổng thanh toán mô phỏng\n(Mock Payment Gateway)" as Gateway
+actor "VNPay Sandbox\n(External Payment System)" as Gateway
+note right of UC11
+  Precondition: Member đã có JWT hợp lệ.
+  Nếu chưa đăng nhập, hoàn tất UC-09 rồi tiếp tục checkout.
+end note
 Member -- UC06
 Member -- UC11
 Member -- UC13
+Member -- UC15
+Member -- UC16
+Member -- UC17
+Member -- UC18
 Member -- UC21
-UC14 -- Gateway
+UC13 -- Gateway
 @enduml

@@ -1,0 +1,169 @@
+@startuml
+skinparam backgroundColor white
+skinparam ActivityBackgroundColor LightCyan
+skinparam ActivityBorderColor DarkCyan
+skinparam ActivityDiamondBackgroundColor LightYellow
+skinparam ActivityDiamondBorderColor DarkGoldenRod
+skinparam linetype ortho
+
+|Customer|
+start
+:Xem chi tiết sản phẩm và tùy chỉnh;
+:Thêm sản phẩm vào giỏ hàng;
+
+|Frontend|
+:Lưu giỏ hàng vào LocalStorage;
+
+|Customer|
+:Mở giỏ hàng;
+
+|Frontend|
+if (Giỏ hàng có sản phẩm?) then (Có)
+    |Customer|
+    :Bấm "Tạo đơn hàng" (Checkout);
+else (Không)
+    |Frontend|
+    :Hiển thị thông báo giỏ hàng rỗng;
+    
+    |Customer|
+    :Quay về menu;
+    detach
+endif
+
+|Frontend|
+if (Khách hàng đã đăng nhập?) then (Có)
+    ' Bỏ qua xác thực, tiếp tục Checkout
+else (Chưa)
+    |Frontend|
+    :Lưu trạng thái giỏ hàng hiện tại;
+    
+    |Customer|
+    repeat
+        :Chọn Đăng nhập hoặc Đăng ký;
+        :Nhập thông tin xác thực;
+        
+        |Backend|
+        :Xác thực thông tin người dùng;
+        
+        if (Xác thực thành công?) then (Có)
+            |Backend|
+            :Cấp phát token JWT;
+            
+            |Frontend|
+            :Lưu JWT an toàn;
+        else (Không)
+            |Backend|
+            :Trả về lỗi xác thực;
+            
+            |Frontend|
+            :Hiển thị thông báo lỗi;
+            
+            |Customer|
+            if (Khách hàng chọn thử lại?) then (Có)
+                ' Tiếp tục vòng lặp xác thực
+            else (Không)
+                :Kết thúc luồng xác thực;
+                detach
+            endif
+        endif
+    repeat while (Xác thực thành công?) is (Không)
+endif
+
+|Frontend|
+:Gửi yêu cầu tạo đơn hàng\n(kèm JWT & Giỏ hàng);
+
+|Backend|
+:Kiểm tra sản phẩm, Size, Topping và số lượng;
+:Kiểm tra tồn kho và khả dụng;
+
+if (Dữ liệu hợp lệ và đủ tồn kho?) then (Có)
+    |Backend|
+    :Tính lại tổng tiền từ dữ liệu gốc;
+    :Thực hiện Database Transaction & Optimistic Locking;
+    :Tạo đơn hàng trạng thái PENDING;
+    :Sinh mã đơn hàng;
+    :Trả thông tin đơn hàng về Frontend;
+else (Không)
+    |Backend|
+    :Trả về lỗi nghiệp vụ;
+    
+    |Frontend|
+    :Hiển thị thông báo lỗi;
+    
+    |Customer|
+    :Chỉnh sửa lại giỏ hàng;
+    detach
+endif
+
+|Frontend|
+:Hiển thị phương thức thanh toán VNPay;
+
+|Customer|
+:Chọn phương thức thanh toán;
+
+repeat
+    |Customer|
+    :Xác nhận thanh toán;
+    
+    |Frontend|
+    :Tạo Idempotency-Key cho Payment attempt;
+    :Gửi yêu cầu thanh toán;
+    
+    |Backend|
+    :Kiểm tra Idempotency-Key để\nchống xử lý giao dịch trùng lặp;
+    :Tạo yêu cầu đã ký và trả payment URL;
+    
+    |Customer|
+    :Chuyển sang VNPay Sandbox;
+    :Chọn nguồn tiền và xác nhận;
+
+    |VNPay Sandbox|
+    :Xử lý giao dịch;
+    :Gửi IPN có chữ ký đến Backend;
+
+    |Backend|
+    :Xác minh chữ ký, mã tham chiếu, số tiền và trạng thái;
+    
+    if (Thanh toán thành công?) then (Có)
+        |Backend|
+        :Ghi nhận Payment thành công;
+        :Cập nhật trạng thái đơn hàng từ PENDING sang PAID;
+        
+        |Frontend|
+        :Xóa giỏ hàng;
+        :Xóa dữ liệu giỏ hàng trong LocalStorage;
+        :Hiển thị thông tin xác nhận đơn hàng,\nmã đơn và trạng thái PAID;
+        
+        |Customer|
+        :Kết thúc quy trình đặt hàng;
+        stop
+    else (Không)
+        |Backend|
+        :Ghi nhận Payment thất bại;
+        :Cập nhật trạng thái đơn hàng thành PAYMENT_FAILED;
+        :Hoàn tồn kho đã giữ đúng một lần;
+        
+        |Frontend|
+        :Giữ nguyên giỏ hàng;
+        :Giữ nguyên dữ liệu LocalStorage;
+        :Hiển thị thông báo thanh toán thất bại;
+        
+        |Customer|
+        if (Khách hàng chọn thử thanh toán lại?) then (Có)
+            |Backend|
+            :Kiểm tra và giữ tồn kho lại trong transaction;
+            if (Đủ tồn kho?) then (Có)
+                :Chuyển PAYMENT_FAILED về PENDING;
+                :Tạo Payment attempt mới;
+            else (Không)
+                :Rollback và yêu cầu cập nhật giỏ;
+                detach
+            endif
+        else (Không)
+            :Quay về giỏ hàng;
+            detach
+        endif
+    endif
+repeat while (Khách hàng chọn thử thanh toán lại?) is (Có)
+
+@enduml

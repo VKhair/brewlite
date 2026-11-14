@@ -45,7 +45,7 @@ Hệ thống yêu cầu được phân loại theo thang đo MoSCoW nhằm xác 
 | **FR-05** | Đăng ký tài khoản người dùng | Xác thực | **Must-have** | Sprint 2 | Backend (API) + Frontend (Web) |
 | **FR-06** | Đăng nhập và Xác thực phiên (JWT) | Xác thực | **Must-have** | Sprint 2 | Backend (API) + Frontend (Web) |
 | **FR-07** | Tạo đơn hàng (Checkout) & Kiểm soát tồn kho đồng thời | Đặt đơn | **Must-have** | Sprint 2 | Backend (API) + Frontend (Web) |
-| **FR-08** | Xử lý thanh toán qua Cổng thanh toán mô phỏng (Mock Payment) | Thanh toán | **Must-have** | Sprint 2 | Backend (API) + Frontend (Web) |
+| **FR-08** | Thanh toán qua VNPay Sandbox | Thanh toán | **Must-have** | Sprint 2 | Backend (API) + Frontend (Web) |
 | **FR-09** | Xử lý giao dịch thanh toán thất bại và Bảo toàn giỏ hàng | Thanh toán | **Must-have** | Sprint 2 | Backend (API) + Frontend (Web) |
 | **FR-10** | Hiển thị xác nhận đơn hàng và mã tra cứu | Quản lý trạng thái đơn | **Must-have** | Sprint 2 | Frontend (Web) |
 | **FR-11** | Xem danh sách lịch sử đơn hàng của người dùng | Lịch sử đơn | **Must-have** | Sprint 2 | Backend (API) + Frontend (Web) |
@@ -56,7 +56,7 @@ Hệ thống yêu cầu được phân loại theo thang đo MoSCoW nhằm xác 
 | **FR-16** | Lưu giỏ hàng tạm thời vào bộ nhớ cục bộ (Local Storage Persistence) | Giỏ hàng | **Should-have** | Sprint 2 | Frontend (Web) |
 | **FR-17** | Áp dụng mã khuyến mãi giảm giá (Promotion Discount) | Đặt đơn & Thanh toán | **Should-have** | Sprint 2 | Backend (API) + Frontend (Web) |
 | **FR-18** | Tích lũy và sử dụng điểm thưởng thành viên (Loyalty Program) | Đặt đơn & Thanh toán | **Could-have** | Sprint 2 | Backend (API) + Frontend (Web) |
-| **FR-19** | Thanh toán tiền thật qua cổng ngân hàng/VNPAY/MoMo | Thanh toán thực tế | **Won't-have** | Ngoài phạm vi | - |
+| **FR-19** | Thanh toán production/thu tiền thật qua ngân hàng, VNPay hoặc MoMo | Thanh toán thực tế | **Won't-have** | Ngoài phạm vi | - |
 | **FR-20** | Ứng dụng di động độc lập (Native iOS/Android App trên Store) | Nền tảng | **Won't-have** | Ngoài phạm vi | - |
 | **FR-21** | Hệ thống định vị shipper và phân phối giao vận | Vận chuyển | **Won't-have** | Ngoài phạm vi | - |
 
@@ -159,28 +159,30 @@ Hệ thống yêu cầu được phân loại theo thang đo MoSCoW nhằm xác 
 
 ---
 
-### FR-08: Xử lý thanh toán qua Cổng thanh toán mô phỏng (Mock Payment)
-- **Tác nhân:** Khách hàng (Member), Cổng thanh toán mô phỏng (Mock Payment Gateway)
+### FR-08: Thanh toán qua VNPay Sandbox
+- **Tác nhân:** Khách hàng (Member), VNPay Sandbox
 - **Mức độ ưu tiên:** Must-have | **Sprint:** 2
-- **Mô tả:** Khách hàng thanh toán không dùng tiền mặt (chọn Ví điện tử hoặc Thẻ ngân hàng) qua cổng mô phỏng. Khi thanh toán thành công, đơn chuyển trạng thái sang `PAID`.
+- **Mô tả:** Khách hàng chọn thanh toán qua VNPay, được chuyển sang môi trường VNPay Sandbox để chọn nguồn tiền/thử nghiệm giao dịch. Đây là môi trường kiểm thử, không phải tích hợp production và không thu tiền thật. BrewLite chỉ xác nhận đơn `PAID` sau khi backend xác minh phản hồi/IPN VNPay hợp lệ; không tin cậy riêng URL quay về trình duyệt.
 - **Tiêu chí chấp nhận (Acceptance Criteria):**
-  - **AC-08.1 (Gửi yêu cầu thanh toán idempotent):** Client gọi API `POST /payments` với payload gồm `orderId`, `paymentMethod` (EWALLET / CARD), và tiêu đề/payload kèm `Idempotency-Key` (UUID v4).
+  - **AC-08.1 (Tạo yêu cầu thanh toán idempotent):** Client gọi API `POST /payments` với `orderId`, `paymentMethod: VNPAY` và `Idempotency-Key` (UUID v4). Backend tự lấy số tiền từ đơn đã lưu, tạo yêu cầu VNPay có mã tham chiếu duy nhất và trả URL thanh toán cho client.
   - **AC-08.2 (Thanh toán thành công - Happy Path):**
-    - Cổng thanh toán mô phỏng xử lý thành công, hệ thống chuyển trạng thái đơn hàng từ `PENDING` sang `PAID`.
+    - Backend xác minh chữ ký và đối chiếu mã tham chiếu, số tiền, đơn hàng, trạng thái giao dịch từ phản hồi/IPN VNPay; chỉ khi kết quả hợp lệ và thành công mới chuyển đơn từ `PENDING` sang `PAID`.
     - Giỏ hàng của người dùng được dọn sạch.
     - Chuyển hướng sang màn hình xác nhận đơn hàng thành công.
-  - **AC-08.3 (Chống lặp thanh toán - Idempotent):** Gửi 2 lần cùng một `Idempotency-Key` chỉ tạo/xử lý 1 giao dịch duy nhất, không bị trừ tiền hoặc lặp đơn 2 lần.
+  - **AC-08.3 (Chống lặp thanh toán - Idempotent):** Gửi lại cùng `Idempotency-Key` cho cùng lần thanh toán chỉ trả lại/kết thúc cùng một yêu cầu VNPay, không tạo yêu cầu thanh toán mới. Mất phản hồi chưa được coi là thất bại; phải tra cứu hoặc chờ IPN trước khi quyết định bước tiếp theo.
+  - **AC-08.4 (Xác minh IPN):** IPN sai chữ ký, sai mã tham chiếu, sai số tiền, không khớp đơn hoặc trạng thái không hợp lệ không được cập nhật đơn; ghi log an toàn và trả phản hồi theo giao thức VNPay.
+  - **AC-08.5 (IPN lặp):** Nhận lại IPN của cùng giao dịch không được cộng/trừ tồn kho, tạo Payment hoặc chuyển trạng thái lần thứ hai; phản hồi idempotent theo kết quả đã lưu.
 
 ---
 
-### FR-09: Xử lý giao dịch thanh toán thất bại và Bảo toàn giỏ hàng
-- **Tác nhân:** Khách hàng (Member), Cổng thanh toán mô phỏng
+### FR-09: Xử lý giao dịch VNPay thất bại và Bảo toàn giỏ hàng
+- **Tác nhân:** Khách hàng (Member), VNPay Sandbox
 - **Mức độ ưu tiên:** Must-have | **Sprint:** 2
-- **Mô tả:** Khi thanh toán lỗi (thẻ hết hạn, không đủ số dư, timeout), hệ thống chuyển đơn sang trạng thái `PAYMENT_FAILED` và **giữ nguyên giỏ hàng** để khách hàng có thể chọn thanh toán lại ngay.
+- **Mô tả:** Khi VNPay xác nhận giao dịch thất bại, hệ thống ghi nhận lần thanh toán thất bại, chuyển đơn sang `PAYMENT_FAILED`, hoàn tồn kho đã giữ và **giữ nguyên giỏ hàng**. Khách có thể thử lại trên cùng đơn; backend kiểm tra/giữ tồn kho lại trước khi tạo một lần thanh toán mới.
 - **Tiêu chí chấp nhận (Acceptance Criteria):**
-  - **AC-09.1 (Ghi nhận trạng thái lỗi):** Khi cổng thanh toán trả về lỗi, hệ thống cập nhật trạng thái đơn thành `PAYMENT_FAILED`.
+  - **AC-09.1 (Ghi nhận trạng thái lỗi):** Khi backend xác minh VNPay trả kết quả thất bại, ghi nhận Payment thất bại, chuyển đơn thành `PAYMENT_FAILED` và hoàn tồn kho đúng một lần.
   - **AC-09.2 (Bảo toàn giỏ hàng):** Giỏ hàng phía Client **không bị xóa**, toàn bộ danh sách món và tùy chọn được giữ nguyên.
-  - **AC-09.3 (Tùy chọn xử lý):** Hiển thị màn hình thông báo lỗi kèm 2 lựa chọn: "Thử lại thanh toán" (chuyển lại `PENDING` $\rightarrow$ `PAID`) hoặc "Quay lại giỏ hàng".
+  - **AC-09.3 (Thử lại trên cùng đơn):** Hiển thị "Thử lại thanh toán" hoặc "Quay lại giỏ hàng". Khi thử lại, giữ nguyên `orderId`, kiểm tra và giữ tồn kho lại trong transaction, chuyển đơn `PAYMENT_FAILED → PENDING`, tạo Payment attempt mới với `Idempotency-Key` mới. Nếu không đủ tồn kho thì từ chối thử lại và yêu cầu cập nhật giỏ.
 
 ---
 
@@ -313,8 +315,8 @@ Hệ thống yêu cầu phi chức năng xác lập các tiêu chuẩn kỹ thu�
 | **NFR-05** | Bảo mật (Security) | Băm mật khẩu người dùng một chiều an toàn | Thuật toán `bcrypt` với Salt rounds $\ge 10$ | Không bao giờ lưu mật khẩu dạng văn bản thô (plaintext) trong database. Ngay cả quản trị viên trực tiếp xem bảng cơ sở dữ liệu cũng không thể dịch ngược được mật khẩu. |
 | **NFR-06** | Bảo mật (Security) | Phòng chống lỗ hổng Injection và XSS | Parameterized Queries qua ORM, NestJS `ValidationPipe` whitelist | 100% dữ liệu gửi lên API đều được kiểm tra bằng `class-validator` với `{ whitelist: true, forbidNonWhitelisted: true }`. Đầu vào chứa mã SQL Injection hoặc HTML/script độc hại bị chặn ngay lập tức. |
 | **NFR-07** | Bảo mật (Security) | Mã hóa đường truyền HTTPS & Quản lý an toàn bí mật | HTTPS / TLS, Database không public cổng 5432, Secrets qua biến môi trường | Đường truyền Production chạy qua HTTPS có chứng chỉ SSL hợp lệ do nền tảng triển khai cấp phát; cơ sở dữ liệu PostgreSQL chỉ nhận kết nối nội bộ trong mạng Private; secret không commit vào Git. |
-| **NFR-08** | Độ tin cậy (Reliability) | Transaction ACID, Optimistic Locking & Idempotent Payment | DB Transaction `Read Committed`, Optimistic Locking (`stock`), Idempotency-Key (UUID v4), FSM assertTransition | (1) Đặt hàng đồng thời không vượt tồn kho nhờ Transaction + Optimistic Locking.<br>(2) Gửi trùng `Idempotency-Key` chỉ trừ tiền và ghi nhận đơn 1 lần duy nhất.<br>(3) Hàm `assertTransition` chặn đứng mọi hành vi nhảy cóc trạng thái đơn hàng. |
-| **NFR-09** | Độ tin cậy (Reliability) | Khả năng phục hồi giỏ hàng khi sự cố giao dịch | Bảo toàn giỏ hàng cục bộ khi thanh toán lỗi | Khi cổng thanh toán mô phỏng phản hồi thất bại (`PAYMENT_FAILED`), giỏ hàng phía Client được giữ nguyên 100% để khách hàng có thể chọn thanh toán lại ngay. |
+| **NFR-08** | Độ tin cậy (Reliability) | Transaction ACID, Optimistic Locking, xác minh VNPay và Idempotency | DB Transaction, kiểm soát `stock`, Idempotency-Key (UUID v4), xác minh chữ ký IPN và FSM transition | (1) Đặt hàng đồng thời không vượt tồn kho.<br>(2) Cùng key/attempt không khởi tạo giao dịch lặp.<br>(3) IPN lặp/không hợp lệ không thay đổi kết quả đã lưu.<br>(4) Chỉ chuyển đơn sang `PAID` sau khi xác minh dữ liệu VNPay. |
+| **NFR-09** | Độ tin cậy (Reliability) | Khả năng phục hồi giỏ hàng và tồn kho khi giao dịch lỗi | Giữ giỏ hàng, hoàn tồn kho khi xác nhận thất bại | Khi VNPay Sandbox xác nhận thất bại (`PAYMENT_FAILED`), giỏ hàng Client được giữ nguyên, tồn kho được hoàn đúng một lần; thử lại cùng đơn phải kiểm tra/giữ tồn kho lại. |
 | **NFR-10** | Tính khả dụng (Usability) | Thiết kế ưu tiên di động (Mobile-First) và hỗ trợ PWA | Responsive $360\text{ px} - 1920\text{ px}$, nút $\ge 44\text{ px} \times 44\text{ px}$, Web App Manifest | Giao diện tối ưu trải nghiệm chạm trên điện thoại di động; hỗ trợ cài đặt lên màn hình chính (Add to Home Screen) dạng PWA kèm biểu tượng và màn hình chờ đồng bộ. |
 | **NFR-11** | Tính khả dụng (Usability) | Đầy đủ 3 trạng thái giao diện chuẩn mực (UI States) | 100% màn hình có dữ liệu: Loading State, Empty State, Error State | Không để màn hình trắng (blank screen) trong bất kỳ trường hợp nào. Có thông báo lỗi bằng tiếng Việt kèm nút bấm thử lại (Retry) tiện lợi. |
 | **NFR-12** | Khả năng triển khai & Vận hành (Deployability & DevOps) | Phân bổ rõ ràng theo Task 4 (Sprint 1) và Task 5 (Sprint 2) | **Sprint 1 (Task 4.4):** CI Gate tự động (Install $\rightarrow$ Lint $\rightarrow$ Test $\rightarrow$ Build)<br>**Sprint 2 (Task 5.2):** `docker-compose.yml` local & Health Check (`GET /health`)<br>**Sprint 2 (Task 5.3):** CD Pipeline tự động & Rollback $< 5\text{ phút}$ | (1) Sprint 1: Mọi PR vào `main` bắt buộc pass CI mới được merge.<br>(2) Sprint 2: Chạy toàn bộ hệ thống local bằng 1 lệnh `docker compose up`; `GET /health` phản hồi trạng thái kết nối DB.<br>(3) Sprint 2: Image gắn tag Git Commit SHA; cho phép rollback về phiên bản ổn định trước đó trong $< 5\text{ phút}$ nếu phát hiện lỗi sau deploy. |
@@ -345,7 +347,7 @@ Hệ thống yêu cầu phi chức năng xác lập các tiêu chuẩn kỹ thu�
 |  - FR-04: Quản lý giỏ hàng & tính tiền realtime                                                    |
 |  - FR-05, FR-06: Đăng ký, Đăng nhập và Xác thực phiên (JWT)                                        |
 |  - FR-07: Tạo đơn hàng (Checkout) & Kiểm soát tồn kho đồng thời (Optimistic Locking)               |
-|  - FR-08, FR-09: Thanh toán mô phỏng (Thành công / Thất bại) & Bảo toàn giỏ hàng                   |
+|  - FR-08, FR-09: VNPay Sandbox (Thành công / Thất bại) & bảo toàn giỏ hàng/tồn kho                 |
 |  - FR-10: Hiển thị xác nhận đơn hàng (Mã đơn, PAID, Mời lấy nước tại quầy)                         |
 |  - FR-11, FR-12: Xem lịch sử (GET /orders/me) và Vòng đời đơn hàng FSM 5 bước                      |
 |  - FR-13: Endpoint kiểm tra sức khỏe hệ thống (GET /health)                                        |

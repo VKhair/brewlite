@@ -1,0 +1,62 @@
+@startuml BrewLite_Lightsail_Deployment
+title BrewLite - AWS Lightsail Deployment (Task 3.2)
+
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+actor "Customer" as customer
+cloud "Internet" as internet {
+  node "VNPay Sandbox" as vnp
+  artifact "GitHub Repository" as repo
+  artifact "GitHub Actions\n(CI/CD - planned)" as actions
+}
+
+node "AWS Account" as aws {
+  node "AWS Lightsail\nRegion TBD" as lightsail {
+    node "Container Service: brewlite-web\nPublic HTTPS endpoint" as webService {
+      artifact "Next.js Web container\nport 3000" as web
+    }
+
+    node "Container Service: brewlite-api\nPublic HTTPS endpoint\n(Web API + VNPay IPN)" as apiService {
+      artifact "NestJS API container\nport 3001" as api
+    }
+
+    database "Managed PostgreSQL\nPrivate mode · port 5432" as db
+
+    artifact "brewlite-web image store\ncommit SHA tag" as webImages
+    artifact "brewlite-api image store\ncommit SHA tag" as apiImages
+  }
+}
+
+customer --> webService : HTTPS
+customer --> apiService : HTTPS API calls\nNEXT_PUBLIC_API_URL
+apiService --> customer : Payment URL response
+customer --> vnp : Redirect using payment URL
+vnp --> apiService : IPN · HTTPS
+vnp ..> webService : Return URL via browser
+web --> apiService : Server-side API calls\nif used
+api --> db : Private network\nDATABASE_URL
+
+repo ..> actions : Workflow trigger
+actions ..> webImages : Build/push Web image\nSHA tag
+actions ..> apiImages : Build/push API image\nSHA tag
+webImages ..> webService : Create deployment
+apiImages ..> apiService : Create deployment
+
+note bottom of lightsail
+All Lightsail resources must use the same Region.
+Topology is a target; AWS resources are not provisioned yet.
+end note
+
+note bottom of apiService
+CORS allowlist for Web origin; JWT and request validation.
+Verify VNPay IPN signature. Return URL does not confirm payment.
+end note
+
+note bottom of db
+Keep database private. GitHub-hosted runner cannot connect directly;
+run migrations from a Lightsail-side job/runner.
+end note
+
+@enduml

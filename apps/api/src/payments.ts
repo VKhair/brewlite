@@ -1,7 +1,8 @@
 import { Body, ConflictException, Controller, Headers, HttpCode, Injectable, Post, Req, UseGuards } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { randomUUID } from 'node:crypto';
-import { AuthRequest, JwtGuard } from './auth';
+import { JwtGuard } from './auth';
+import type { AuthRequest } from './auth';
 import { Database } from './database';
 import { PaymentDto } from './dto';
 import { OrdersService } from './orders';

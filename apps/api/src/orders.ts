@@ -1,7 +1,8 @@
 import { Body, ConflictException, Controller, ForbiddenException, Get, Injectable,
   NotFoundException, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { AuthRequest, JwtGuard } from './auth';
+import { JwtGuard } from './auth';
+import type { AuthRequest } from './auth';
 import { Database, Queryable } from './database';
 import { CreateOrderDto, OrderItemDto, StatusDto } from './dto';
 import { assertTransition, OrderStatus } from './order-state';

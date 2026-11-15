@@ -1,0 +1,21 @@
+{
+  "name": "BrewLite",
+  "short_name": "BrewLite",
+  "description": "Đặt đồ uống trực tuyến không dùng tiền mặt",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffbeb",
+  "theme_color": "#d97706",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

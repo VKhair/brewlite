@@ -25,6 +25,7 @@
     "dev:api": "npm run start:dev --workspace=api",
     "dev:web": "npm run dev --workspace=web",
     "db:setup": "npm run db:setup --workspace=api",
+    "db:generate": "npm run db:generate --workspace=api",
     "db:seed": "npm run db:seed --workspace=api",
     "user:staff": "npm run user:staff --workspace=api --",
     "lint": "npm run lint --workspaces --if-present",

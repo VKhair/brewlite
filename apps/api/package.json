@@ -14,6 +14,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "db:setup": "node scripts/migrate.cjs && node scripts/seed.cjs",
+    "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "node scripts/seed.cjs",
     "user:staff": "node scripts/staff.cjs STAFF",

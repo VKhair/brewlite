@@ -1,6 +1,6 @@
 
 "use client";
-
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveCart } from "../lib/cart-store";
@@ -319,7 +319,7 @@ function handleCheckout() {
             <button onClick={() => setShowCart(true)}>
               Giỏ hàng của tôi
             </button>
-            <a href="/orders">Đơn hàng của tôi</a>
+            <Link href="/orders">Đơn hàng của tôi</Link>
             <a href="#footer">Ưu đãi & Voucher</a>
           </nav>
 

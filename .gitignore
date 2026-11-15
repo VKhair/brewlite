@@ -1,13 +1,82 @@
+# ==========================================
+# Dependencies & Package Managers
+# ==========================================
 node_modules/
+.pnp
+.pnp.js
+package-lock.json.bak
+
+# ==========================================
+# Build Outputs & Production Bundles
+# ==========================================
 dist/
-.next/
 build/
-coverage/
+out/
+.next/
+apps/*/dist/
+apps/*/.next/
+apps/*/out/
+*.tsbuildinfo
+
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
 .env
 .env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 !.env.example
+
+# ==========================================
+# Logs & Diagnostic Dumps
+# ==========================================
+logs/
 *.log
-.DS_Store
-.vscode/
-.idea/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==========================================
+# Caches & Turbopack
+# ==========================================
+.turbo/
+.cache/
+tmp/
+temp/
+
+# ==========================================
+# Testing & Coverage Reports
+# ==========================================
+coverage/
+.nyc_output/
+test-results/
+
+# ==========================================
+# Database Local Storage & PGlite
+# ==========================================
 pgdata/
+*.sqlite
+*.sqlite3
+*.db
+.pglite/
+
+# ==========================================
+# Operating System & IDE Files
+# ==========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.sublime-project
+*.sublime-workspace
+*.sw?

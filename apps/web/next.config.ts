@@ -1,7 +1,9 @@
-
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    cpus: 1,
+  },
   images: {
     remotePatterns: [
       {
@@ -9,15 +11,6 @@ const nextConfig: NextConfig = {
         hostname: "images.unsplash.com",
       },
     ],
-  },
-
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
   },
 
   async rewrites() {

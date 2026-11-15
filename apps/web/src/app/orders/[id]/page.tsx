@@ -1,261 +1,288 @@
-
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useSyncExternalStore } from "react";
-import {
-  subscribeOrders,
-  type Order,
-} from "../../../lib/orders-store";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-const ORDERS_KEY = "brewLiteOrders";
-const getProductImage = (productId: string, imageUrl?: string) => {
-  const images: Record<string, string> = {
-    "10000000-0000-4000-8000-000000000001": "/images/coffee-milk.jpg",
-    "10000000-0000-4000-8000-000000000002": "/images/peach-tea.jpg",
-    "10000000-0000-4000-8000-000000000003": "/images/matcha-freeze.jpg",
-    "10000000-0000-4000-8000-000000000004": "/images/cacao-ice.jpg",
-  };
+import { api, money, dateTime, statusName, type Order } from "../../../lib/api";
 
-  return images[productId] || imageUrl || "";
+import { useStore } from "../../../lib/store";
+import { PageHeading, Status } from "../../../components/ui";
+
+type PaymentMethod = "EWALLET" | "CARD";
+
+type PaymentResult = {
+  paymentStatus: string;
+  message: string;
 };
-function getOrdersSnapshot() {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(ORDERS_KEY);
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
-function getServerSnapshot() {
-  return null;
+function fetchOrder(id: string, token: string) {
+  return api<Order>(`/orders/${id}`, {}, token);
 }
 
-export default function OrderDetailPage() {
-  const params = useParams<{ id: string }>();
-  const orderId = params.id;
+export default function OrderDetail() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { ready, session } = useStore();
 
-  const snapshot = useSyncExternalStore(
-    subscribeOrders,
-    getOrdersSnapshot,
-    getServerSnapshot
-  );
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const orders: Order[] = snapshot
-    ? JSON.parse(snapshot)
-    : [];
+  const [method, setMethod] = useState<PaymentMethod>("EWALLET");
 
-  const order = orders.find(
-    (item) => item.orderId.trim() === orderId.trim()
-  );
+  const token = session?.access_token;
 
-  const formatPrice = (price: number) =>
-    price.toLocaleString("vi-VN") + "đ";
+  // Tự động lấy thông tin đơn hàng
+  useEffect(() => {
+    if (!ready) return;
 
-  const getStatus = (status: string) => {
-    switch (status) {
-      case "PAID": return "Đã thanh toán";
-      case "PAYMENT_FAILED": return "Thanh toán thất bại";
-      case "PENDING": return "Chờ thanh toán";
-      case "CONFIRMED": return "Đã xác nhận";
-      case "PROCESSING": return "Đang chuẩn bị";
-      case "SHIPPING": return "Đang giao hàng";
-      case "DELIVERED": return "Đã giao hàng";
-      case "CANCELLED": return "Đã hủy";
-      default: return status;
+    if (!token) {
+      router.replace("/login?next=%2Forders");
+      return;
     }
-  };
 
-  if (!order) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#faf7f2] px-4">
-        <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
-          <h1 className="text-2xl font-bold text-[#493523]">
-            Không tìm thấy đơn hàng
-          </h1>
+    let active = true;
 
-          <p className="mt-3 text-sm text-gray-500">
-            Đơn hàng không tồn tại hoặc chưa được lưu.
-          </p>
+    const getOrder = async () => {
+      try {
+        const result = await fetchOrder(id, token);
 
-          <Link
-            href="/orders"
-            className="mt-6 inline-block rounded-full bg-[#8b6b4a] px-6 py-3 text-white"
-          >
-            Quay lại đơn hàng
-          </Link>
-        </div>
-      </main>
-    );
+        if (!active) return;
+
+        setOrder(result);
+        setError("");
+      } catch (err) {
+        if (!active) return;
+
+        setError(errorMessage(err, "Không lấy được thông tin đơn"));
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void getOrder();
+
+    return () => {
+      active = false;
+    };
+  }, [ready, token, id, router]);
+
+  // Tải lại thông tin đơn hàng khi người dùng yêu cầu
+  async function load() {
+    if (!token) return;
+
+    try {
+      const result = await fetchOrder(id, token);
+      setOrder(result);
+      setError("");
+    } catch (err) {
+      setError(errorMessage(err, "Không lấy được thông tin đơn"));
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // Giữ nguyên phần return hiển thị chi tiết đơn hàng bên dưới.
+  async function refreshOrder() {
+    setLoading(true);
+    await load();
+  }
+
+  // Hủy đơn hàng
+  async function cancel() {
+    if (!token || !order) return;
+
+    if (!window.confirm("Bạn muốn hủy đơn này?")) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await api(`/orders/${id}/cancel`, { method: "PATCH" }, token);
+
+      await load();
+    } catch (err) {
+      setError(errorMessage(err, "Không thể hủy đơn"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Thanh toán lại
+  async function pay() {
+    if (!token || !order) return;
+
+    setBusy(true);
+    setError("");
+
+    try {
+      const result = await api<PaymentResult>(
+        "/payments",
+        {
+          method: "POST",
+          headers: {
+            "Idempotency-Key": crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            orderId: id,
+            paymentMethod: method,
+            mockOutcome: "SUCCESS",
+          }),
+        },
+        token,
+      );
+
+      if (result.paymentStatus === "SUCCESS") {
+        router.push(`/success/${id}`);
+      } else {
+        setError(result.message);
+        await load();
+      }
+    } catch (err) {
+      setError(errorMessage(err, "Thanh toán không thành công"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <main className="min-h-screen bg-[#faf7f2] px-4 py-12">
-      <div className="mx-auto max-w-4xl">
+    <div className="container inner-page">
+      <div className="breadcrumbs">
+        <Link href="/orders">← Đơn hàng của tôi</Link>
+      </div>
 
-        <Link
-          href="/orders"
-          className="text-sm font-medium text-[#8b6b4a] hover:underline"
-        >
-          ← Quay lại đơn hàng
-        </Link>
+      {loading ? (
+        <div className="empty-state">Đang tải chi tiết...</div>
+      ) : !order ? (
+        <div className="empty-state">
+          <h2>Không xem được đơn hàng</h2>
+          <p>{error}</p>
 
-        <div className="mb-8 mt-6">
-          <h1 className="text-3xl font-bold text-[#493523]">
-            Chi tiết đơn hàng
-          </h1>
-
-          <p className="mt-2 text-sm text-gray-500">
-            Mã đơn hàng: {order.orderId}
-          </p>
+          <Link href="/orders" className="btn">
+            Quay lại
+          </Link>
         </div>
+      ) : (
+        <>
+          <PageHeading
+            eyebrow="CHI TIẾT ĐƠN HÀNG"
+            title={`Đơn #${order.orderCode.slice(-8)}`}
+            description={`Đặt vào ${dateTime(order.createdAt)}`}
+          />
 
-        <div className="space-y-6">
+          <div className="cart-layout">
+            <div className="panel">
+              <h2>Trạng thái hiện tại</h2>
 
-          {/* Order status */}
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-[#493523]">
-              Trạng thái đơn hàng
-            </h2>
+              <Status status={order.status} />
 
-            <p className="mt-3 inline-block rounded-full bg-[#f3eadf] px-4 py-2 text-sm font-semibold text-[#8b6b4a]">
-              {getStatus(order.status)}
-            </p>
+              <div className="timeline">
+                {(order.history || []).map((entry, index) => (
+                  <div className="timeline-row" key={index}>
+                    <span className="timeline-dot" />
 
-            <p className="mt-4 text-sm text-gray-500">
-              Ngày đặt hàng:{" "}
-              {new Date(order.createdAt).toLocaleString("vi-VN")}
-            </p>
-          </section>
+                    <div>
+                      <strong>
+                        {statusName[entry.toStatus] || entry.toStatus}
+                      </strong>
 
-          {/* Products */}
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-lg font-bold text-[#493523]">
-              Sản phẩm đã đặt
-            </h2>
-
-            <div className="space-y-5">
-            {order.items.map((item, index) => {
-            console.log("ORDER ITEM:", item.productId, item.imageUrl, item.name);
-
-            return (
-              <div
-                  key={`${item.productId}-${index}`}
-                  className="flex gap-4"
-                >
-                  <img
-                    src={getProductImage(item.productId, item.imageUrl)}
-                    alt={item.name}
-                    className="h-24 w-24 rounded-xl bg-[#eee5dc] object-cover"
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-[#493523]">
-                      {item.name}
-                    </h3>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                      Size: {item.size}
-                    </p>
-
-                    {item.toppings.length > 0 && (
-                      <p className="mt-1 text-sm text-gray-500">
-                        Topping: {item.toppings.join(", ")}
-                      </p>
-                    )}
-
-                    <p className="mt-1 text-sm text-gray-500">
-                      Số lượng: {item.quantity}
-                    </p>
-
-                    <p className="mt-2 font-semibold text-[#8b6b4a]">
-                      {formatPrice(item.unitPrice * item.quantity)}
-                    </p>
+                      <p>{dateTime(entry.createdAt)}</p>
+                    </div>
                   </div>
-                </div>
-            );
-          })}
-            </div>
-
-            <div className="mt-6 border-t border-[#eee5dc] pt-5">
-              <div className="flex justify-between text-lg font-bold">
-                <span className="text-[#493523]">
-                  Tổng thanh toán
-                </span>
-
-                <span className="text-[#8b6b4a]">
-                  {formatPrice(order.total)}
-                </span>
+                ))}
               </div>
-            </div>
-          </section>
 
-          {/* Customer information */}
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-lg font-bold text-[#493523]">
-              Thông tin nhận hàng
-            </h2>
+              <h2 className="gap-title">Các món đã đặt</h2>
 
-            <div className="space-y-3 text-sm">
-              <p>
-                <span className="text-gray-500">Họ tên: </span>
-                <strong>{order.customer.name}</strong>
-              </p>
+              {order.items.map((item, index) => (
+                <div className="order-line" key={index}>
+                  <span>
+                    {item.quantity} × {item.productName}
+                    {" · "}Size {item.sizeName}
+                    {item.toppings.length > 0
+                      ? ` · ${item.toppings
+                          .map((topping) => topping.name)
+                          .join(", ")}`
+                      : ""}
+                  </span>
 
-              <p>
-                <span className="text-gray-500">Số điện thoại: </span>
-                <strong>{order.customer.phone}</strong>
-              </p>
+                  <strong>{money(item.lineTotal)}</strong>
+                </div>
+              ))}
 
-              <p>
-                <span className="text-gray-500">Địa chỉ: </span>
-                <strong>{order.customer.address}</strong>
-              </p>
+              <div className="order-line total">
+                <strong>Tổng thanh toán</strong>
+                <strong>{money(order.totalAmount)}</strong>
+              </div>
 
-              {order.customer.note && (
-                <p>
-                  <span className="text-gray-500">Ghi chú: </span>
-                  <strong>{order.customer.note}</strong>
-                </p>
+              {error && (
+                <div role="alert" className="error-box">
+                  {error}
+                </div>
+              )}
+
+              {["PENDING", "PAYMENT_FAILED"].includes(order.status) && (
+                <div className="order-tools">
+                  <h3>Thanh toán đơn này</h3>
+
+                  <select
+                    value={method}
+                    onChange={(event) =>
+                      setMethod(event.target.value as PaymentMethod)
+                    }
+                    aria-label="Phương thức thanh toán"
+                  >
+                    <option value="EWALLET">Ví điện tử (giả lập)</option>
+
+                    <option value="CARD">Thẻ ngân hàng (giả lập)</option>
+                  </select>
+
+                  <button className="btn" onClick={pay} disabled={busy}>
+                    {busy ? "Đang xử lý..." : "Thanh toán lại ↗"}
+                  </button>
+                </div>
+              )}
+
+              {["PENDING", "PAYMENT_FAILED"].includes(order.status) && (
+                <button className="danger-btn" disabled={busy} onClick={cancel}>
+                  Hủy đơn hàng
+                </button>
               )}
             </div>
-          </section>
 
-          {/* Payment information */}
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-bold text-[#493523]">
-              Thông tin thanh toán
-            </h2>
+            <div className="panel summary">
+              <div className="side-illustration">🥤</div>
 
-            <p className="text-sm text-gray-600">
-              Phương thức:{" "}
-              <strong>{order.payment}</strong>
-            </p>
+              <h2>Cảm ơn bạn đã chọn BrewLite!</h2>
 
-            <p className="mt-3 text-sm text-gray-600">
-              Trạng thái:{" "}
-              <strong>{getStatus(order.status)}</strong>
-            </p>
-          </section>
+              <p className="muted">
+                Các trạng thái đơn hàng sẽ được cập nhật khi quán xử lý. Vui
+                lòng ghé quầy nhận nước khi đơn sẵn sàng.
+              </p>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/orders"
-              className="flex-1 rounded-full border border-[#8b6b4a] py-3 text-center font-semibold text-[#8b6b4a] hover:bg-[#f3eadf]"
-            >
-              Danh sách đơn hàng
-            </Link>
+              <button
+                className="btn btn-block"
+                disabled={busy || loading}
+                onClick={() => void refreshOrder()}
+              >
+                ↻ Cập nhật trạng thái
+              </button>
 
-            <Link
-              href={`/orders/${encodeURIComponent(order.orderId)}/tracking`}
-              className="flex-1 rounded-full bg-[#8b6b4a] py-3 text-center font-semibold text-white hover:bg-[#705338]"
-            >
-              Theo dõi đơn hàng →
-            </Link>
+              <Link href="/menu" className="text-link">
+                Đặt thêm món →
+              </Link>
+            </div>
           </div>
-
-        </div>
-      </div>
-    </main>
+        </>
+      )}
+    </div>
   );
 }

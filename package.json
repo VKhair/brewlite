@@ -2,7 +2,7 @@
   "name": "brewlite",
   "version": "1.0.0",
   "private": true,
-  "description": "Ứng dụng đặt đồ uống mobile-first/PWA. Stack mục tiêu: Next.js, NestJS, PostgreSQL và Docker.",
+  "description": "Ứng dụng đặt đồ uống mobile-first/PWA. Stack: Next.js, NestJS, PostgreSQL, Docker.",
   "homepage": "https://github.com/VKhair/brewlite#readme",
   "bugs": {
     "url": "https://github.com/VKhair/brewlite/issues"
@@ -12,7 +12,7 @@
     "url": "git+https://github.com/VKhair/brewlite.git"
   },
   "license": "ISC",
-  "author": "",
+  "author": "BrewLite Team",
   "workspaces": [
     "apps/*"
   ],
@@ -22,8 +22,22 @@
   },
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run start:dev --workspace=api",
+    "dev:web": "npm run dev --workspace=web",
     "lint": "npm run lint --workspaces --if-present",
+    "lint:api": "npm run lint --workspace=api",
+    "lint:web": "npm run lint --workspace=web",
     "test": "npm run test --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "test:api": "npm run test --workspace=api",
+    "test:web": "npm run test --workspace=web",
+    "test:integration": "npm run test:integration --workspace=api --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "build:api": "npm run build --workspace=api",
+    "build:web": "npm run build --workspace=web",
+    "clean": "node -e \"const fs = require('fs'); ['dist', '.next', 'apps/api/dist', 'apps/web/.next'].forEach(p => fs.rmSync(p, { recursive: true, force: true }));\""
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   }
 }

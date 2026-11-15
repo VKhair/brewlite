@@ -1,0 +1,18 @@
+$kind: http-request
+name: 3.1 Lấy danh sách coupon kích hoạt GET /coupons
+url: "{{baseUrl}}/coupons"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Trả về danh sách mã giảm giá', function () {
+          const res = pm.response.json();
+          pm.expect(Array.isArray(res)).to.be.true;
+          const codes = res.map(c => c.code);
+          pm.expect(codes).to.include.members(['BREWLITE10', 'GIAM20K', 'WELCOME']);
+      });
+    language: text/javascript
+order: 1000

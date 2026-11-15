@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/coupons/validate?code=BREWLITE10&amount=50000"
+method: GET
+queryParams:
+  code: BREWLITE10
+  amount: "50000"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Mã BREWLITE10 giảm đúng 10% trên đơn 50.000đ = 5.000đ', function () {
+          const res = pm.response.json();
+          pm.expect(res.valid).to.be.true;
+          pm.expect(res.discountAmount).to.eql(5000);
+      });
+    language: text/javascript
+order: 2000

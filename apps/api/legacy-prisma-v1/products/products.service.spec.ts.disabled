@@ -1,0 +1,77 @@
+import { NotFoundException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { PrismaService } from '../prisma/prisma.service';
+import { ProductsService } from './products.service';
+import { InventoryService } from '../inventory/inventory.service';
+
+describe('ProductsService', () => {
+  let service: ProductsService;
+
+  const mockPrismaService = {
+    isConnected: false,
+    product: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+  };
+  const mockInventoryService = { getStocks: jest.fn().mockResolvedValue(new Map()) };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ProductsService,
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+        { provide: InventoryService, useValue: mockInventoryService },
+      ],
+    }).compile();
+
+    service = module.get<ProductsService>(ProductsService);
+  });
+
+  it('nên được khởi tạo thành công (defined)', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('findAll', () => {
+    it('nên trả về danh sách sản phẩm', async () => {
+      const result = await service.findAll();
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0]).toHaveProperty('id');
+      expect(result[0]).toHaveProperty('name');
+      expect(result[0]).toHaveProperty('price');
+      expect(result[0]).toHaveProperty('imageUrl');
+    });
+  });
+
+  describe('findOne', () => {
+    it('nên trả về chi tiết sản phẩm nếu ID tồn tại', async () => {
+      const result = await service.findOne(1);
+      expect(result).toBeDefined();
+      expect(result.id).toBe(1);
+      expect(result.name).toBe('Cà phê sữa đá');
+    });
+
+    it('nên ném NotFoundException nếu ID không tồn tại', async () => {
+      await expect(service.findOne(9999)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('create', () => {
+    it('nên thêm sản phẩm mới thành công', async () => {
+      const newProduct = await service.create({
+        name: 'Trà sen vàng',
+        price: 45000,
+        imageUrl: 'https://example.com/tra-sen.jpg',
+        description: 'Trà sen thanh mát',
+      });
+      expect(newProduct).toBeDefined();
+      expect(newProduct.name).toBe('Trà sen vàng');
+      expect(newProduct.price).toBe(45000);
+    });
+  });
+});

@@ -1,0 +1,25 @@
+import { PaymentMethod } from '@prisma/client';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
+
+export class CreatePaymentDto {
+  @IsInt()
+  @Min(1)
+  orderId!: number;
+
+  @IsEnum(PaymentMethod)
+  method!: PaymentMethod;
+
+  @IsBoolean()
+  simulateSuccess!: boolean;
+
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
+}

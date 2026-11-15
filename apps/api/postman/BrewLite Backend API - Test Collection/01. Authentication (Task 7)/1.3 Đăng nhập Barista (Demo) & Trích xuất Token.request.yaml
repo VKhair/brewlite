@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{baristaEmail}}",
+      "password": "{{baristaPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Xác nhận role BARISTA và gán baristaToken', function () {
+          const res = pm.response.json();
+          pm.expect(res).to.have.property('accessToken');
+          pm.environment.set('baristaToken', res.accessToken);
+          pm.expect(res.user.role).to.eql('BARISTA');
+      });
+    language: text/javascript
+order: 3000

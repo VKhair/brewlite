@@ -1,0 +1,157 @@
+import { BadRequestException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { OrderStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { CouponsService } from '../coupons/coupons.service';
+import { OrdersService } from './orders.service';
+import { InventoryService } from '../inventory/inventory.service';
+
+describe('OrdersService', () => {
+  let service: OrdersService;
+  const prisma = {
+    order: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  };
+  const couponsService = {
+    validateCoupon: jest.fn(),
+    listActive: jest.fn(),
+  };
+  const inventoryService = {
+    collectOrderRequirements: jest.fn(),
+    consume: jest.fn(),
+    reverseOrderConsumption: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrdersService,
+        {
+          provide: PrismaService,
+          useValue: prisma,
+        },
+        {
+          provide: CouponsService,
+          useValue: couponsService,
+        },
+        { provide: InventoryService, useValue: inventoryService },
+      ],
+    }).compile();
+
+    service = module.get<OrdersService>(OrdersService);
+  });
+
+  it('returns only the current customer orders, newest first', async () => {
+    const customerId = '6ac0b3e2-9ae0-4d53-8db9-83eb5e8bcd91';
+    const orders = [{ orderCode: 'order-code', items: [], payments: [] }];
+    prisma.order.findMany.mockResolvedValue(orders);
+
+    await expect(service.findMine(customerId)).resolves.toBe(orders);
+    expect(prisma.order.findMany).toHaveBeenCalledWith({
+      where: { customerId },
+      include: { items: true, payments: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  it('rejects missing or malformed customer IDs', async () => {
+    await expect(service.findMine()).rejects.toThrow(BadRequestException);
+    await expect(service.findMine('not-a-uuid')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(prisma.order.findMany).not.toHaveBeenCalled();
+  });
+
+  describe('Order State Machine (Task 10 Tiêu chí A)', () => {
+    it('cho phép các chuyển tiếp hợp lệ', () => {
+      expect(() =>
+        service.assertTransition(OrderStatus.PENDING, OrderStatus.PAID),
+      ).not.toThrow();
+
+      expect(() =>
+        service.assertTransition(OrderStatus.PENDING, OrderStatus.PAYMENT_FAILED),
+      ).not.toThrow();
+
+      expect(() =>
+        service.assertTransition(OrderStatus.PAID, OrderStatus.PREPARING),
+      ).not.toThrow();
+
+      expect(() =>
+        service.assertTransition(OrderStatus.PREPARING, OrderStatus.READY),
+      ).not.toThrow();
+
+      expect(() =>
+        service.assertTransition(OrderStatus.READY, OrderStatus.COMPLETED),
+      ).not.toThrow();
+
+      expect(() =>
+        service.assertTransition(OrderStatus.PAYMENT_FAILED, OrderStatus.PENDING),
+      ).not.toThrow();
+    });
+
+    it('chặn các chuyển tiếp không hợp lệ và ném BadRequestException', () => {
+      // Chặn nhảy cóc từ PENDING lên COMPLETED
+      expect(() =>
+        service.assertTransition(OrderStatus.PENDING, OrderStatus.COMPLETED),
+      ).toThrow(BadRequestException);
+
+      // Chặn nhảy cóc từ PENDING lên READY
+      expect(() =>
+        service.assertTransition(OrderStatus.PENDING, OrderStatus.READY),
+      ).toThrow(BadRequestException);
+
+      // Chặn quay lui từ COMPLETED về PENDING (COMPLETED là terminal)
+      expect(() =>
+        service.assertTransition(OrderStatus.COMPLETED, OrderStatus.PENDING),
+      ).toThrow(BadRequestException);
+
+      // Chặn chuyển từ CANCELLED sang PAID
+      expect(() =>
+        service.assertTransition(OrderStatus.CANCELLED, OrderStatus.PAID),
+      ).toThrow(BadRequestException);
+    });
+  });
+
+  describe('Tồn kho nguyên liệu trong transaction', () => {
+    it('không tạo đơn nếu trừ nguyên liệu thất bại do tồn kho cạnh tranh', async () => {
+      inventoryService.collectOrderRequirements.mockResolvedValue(new Map([[1, 18]]));
+      inventoryService.consume.mockRejectedValue(new BadRequestException('Nguyên liệu không đủ tồn kho'));
+      prisma.$transaction.mockImplementation(async (callback: any) => callback({
+        product: { findUnique: jest.fn().mockResolvedValue({ id: 1, name: 'Cà phê', price: 35000 }) },
+        order: { create: jest.fn().mockResolvedValue({ id: 22 }) },
+      }));
+
+      await expect(service.create({ items: [{ productId: 1, size: 'S', quantity: 1 }] }, 1))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('tạo đơn và trừ nguyên liệu trong cùng transaction', async () => {
+      inventoryService.collectOrderRequirements.mockResolvedValue(new Map([[1, 18]]));
+      inventoryService.consume.mockResolvedValue(undefined);
+      const order = { id: 23, items: [] };
+      prisma.$transaction.mockImplementation(async (callback: any) => callback({
+        product: { findUnique: jest.fn().mockResolvedValue({ id: 1, name: 'Cà phê', price: 35000 }) },
+        order: { create: jest.fn().mockResolvedValue(order) },
+      }));
+
+      await expect(service.create({ items: [{ productId: 1, size: 'S', quantity: 1 }] }, 1)).resolves.toBe(order);
+      expect(inventoryService.consume).toHaveBeenCalledWith(expect.anything(), 23, new Map([[1, 18]]));
+    });
+  });
+
+  it('hoàn nguyên liệu khi hủy đơn', async () => {
+    prisma.$transaction.mockImplementation(async (callback: any) => callback({
+      order: {
+        findUnique: jest.fn().mockResolvedValue({ id: 9, status: OrderStatus.PENDING, items: [], userId: null, pointsUsed: 0 }),
+        update: jest.fn().mockResolvedValue({ id: 9, status: OrderStatus.CANCELLED }),
+      },
+    }));
+    await service.updateStatus(9, OrderStatus.CANCELLED);
+    expect(inventoryService.reverseOrderConsumption).toHaveBeenCalledWith(expect.anything(), 9);
+  });
+});

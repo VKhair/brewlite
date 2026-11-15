@@ -1,0 +1,175 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { OrdersService } from '../orders/orders.service';
+import { CreatePaymentDto } from './dto/create-payment.dto';
+import { InventoryService } from '../inventory/inventory.service';
+
+type PaymentWithOrder = Prisma.PaymentGetPayload<{
+  include: { order: { include: { items: true } } };
+}>;
+
+@Injectable()
+export class PaymentsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ordersService: OrdersService,
+    private readonly inventory: InventoryService,
+  ) {}
+
+  async pay(dto: CreatePaymentDto, idempotencyKeyHeader?: string) {
+    const key = (idempotencyKeyHeader || dto.idempotencyKey || '').trim();
+    if (!key) {
+      throw new BadRequestException('Bắt buộc phải cung cấp Idempotency-Key');
+    }
+    if (
+      idempotencyKeyHeader &&
+      dto.idempotencyKey &&
+      idempotencyKeyHeader.trim() !== dto.idempotencyKey.trim()
+    ) {
+      throw new BadRequestException(
+        'Idempotency-Key trong header và body không khớp',
+      );
+    }
+    const existing = await this.prisma.payment.findUnique({
+      where: { idempotencyKey: key },
+      include: { order: { include: { items: true } } },
+    });
+    if (existing) return this.replay(existing, dto.orderId);
+
+    // This endpoint is explicitly a simulator. Never allow its client-controlled
+    // outcome to mark an order paid in a production deployment.
+    if (process.env.NODE_ENV === 'production') {
+      throw new BadRequestException(
+        'Mock payment chỉ được bật trong môi trường demo/kiểm thử',
+      );
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Recheck inside the transaction to cover a key created between the
+        // initial lookup and transaction start.
+        const prior = await tx.payment.findUnique({
+          where: { idempotencyKey: key },
+          include: { order: { include: { items: true } } },
+        });
+        if (prior) return this.replay(prior, dto.orderId);
+
+        const order = await tx.order.findUnique({
+          where: { id: dto.orderId },
+          include: { items: true },
+        });
+        if (!order)
+          throw new NotFoundException(
+            `Không tìm thấy đơn hàng ID ${dto.orderId}`,
+          );
+
+        const targetStatus = dto.simulateSuccess
+          ? OrderStatus.PAID
+          : OrderStatus.PAYMENT_FAILED;
+        this.ordersService.assertTransition(order.status, targetStatus);
+
+        // A compare-and-set makes concurrent requests using different keys
+        // mutually exclusive. Only the request that changes the order may
+        // apply points or stock effects.
+        const claimed = await tx.order.updateMany({
+          where: { id: order.id, status: order.status },
+          data: { status: targetStatus, pointsEarned: 0 },
+        });
+        if (claimed.count !== 1) {
+          const concurrentReplay = await tx.payment.findUnique({
+            where: { idempotencyKey: key },
+            include: { order: { include: { items: true } } },
+          });
+          if (concurrentReplay)
+            return this.replay(concurrentReplay, dto.orderId);
+          throw new ConflictException(
+            'Đơn hàng đã được xử lý bởi một yêu cầu thanh toán khác',
+          );
+        }
+
+        let pointsEarned = 0;
+        if (dto.simulateSuccess) {
+          pointsEarned = Math.floor(order.totalAmount / 10000);
+          if (order.userId && pointsEarned > 0) {
+            await tx.user.update({
+              where: { id: order.userId },
+              data: { loyaltyPoints: { increment: pointsEarned } },
+            });
+          }
+        } else {
+          await this.inventory.reverseOrderConsumption(tx, order.id);
+          if (order.userId && order.pointsUsed > 0) {
+            await tx.user.update({
+              where: { id: order.userId },
+              data: { loyaltyPoints: { increment: order.pointsUsed } },
+            });
+          }
+        }
+
+        const updatedOrder = await tx.order.update({
+          where: { id: order.id },
+          data: { pointsEarned },
+          include: { items: true },
+        });
+        const payment = await tx.payment.create({
+          data: {
+            orderId: order.id,
+            idempotencyKey: key,
+            amount: order.totalAmount,
+            method: dto.method,
+            status: dto.simulateSuccess
+              ? PaymentStatus.SUCCESS
+              : PaymentStatus.FAILED,
+          },
+        });
+        return {
+          idempotent: false,
+          message: dto.simulateSuccess
+            ? 'Thanh toán giả lập thành công'
+            : 'Thanh toán giả lập thất bại',
+          method: dto.method,
+          pointsEarned,
+          payment,
+          order: updatedOrder,
+        };
+      });
+    } catch (error) {
+      // Unique-key races are resolved by returning the committed result for
+      // this order; the same key can never be applied to another order.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const payment = await this.prisma.payment.findUnique({
+          where: { idempotencyKey: key },
+          include: { order: { include: { items: true } } },
+        });
+        if (payment) return this.replay(payment, dto.orderId);
+      }
+      throw error;
+    }
+  }
+
+  private replay(payment: PaymentWithOrder, requestedOrderId: number) {
+    if (payment.orderId !== requestedOrderId) {
+      throw new ConflictException(
+        'Idempotency-Key này đã được dùng cho đơn hàng khác',
+      );
+    }
+    return {
+      idempotent: true,
+      message:
+        payment.status === PaymentStatus.SUCCESS
+          ? 'Giao dịch giả lập đã được xử lý thành công trước đó'
+          : 'Giao dịch giả lập trước đó đã kết thúc với trạng thái thất bại',
+      payment,
+      order: payment.order,
+    };
+  }
+}

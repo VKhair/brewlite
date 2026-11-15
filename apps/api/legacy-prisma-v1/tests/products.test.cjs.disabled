@@ -37,6 +37,11 @@ test('GET /products returns available seeded products and numeric VND prices', a
     for (const key of ['id', 'name', 'description', 'imageUrl', 'category']) assert.equal(typeof p[key], 'string');
   }
 });
+test('GET /health reports API and database readiness', async () => {
+  const response = await fetch(`${base}/health`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: 'ok', database: 'ok' });
+});
 test('GET /products/:id returns sizes, default M and only linked toppings', async () => {
   const response = await fetch(`${base}/products/${id}`);
   assert.equal(response.status, 200);

@@ -1,0 +1,4 @@
+$kind: collection
+description: |-
+  Bộ kiểm thử API tự động cho Backend NestJS BrewLite (Đề tài Bài tập lớn Công nghệ Phần mềm - ĐH Sài Gòn).
+  Bao gồm đầy đủ 10 Task Product Backlog, phân quyền 3 Role (Customer, Barista, Admin), Order State Machine, Thanh toán Idempotent và Quản lý Tồn kho.

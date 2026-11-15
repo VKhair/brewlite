@@ -1,0 +1,3 @@
+$kind: collection
+description: Kiểm thử tạo đơn hàng, validate DTO, RBAC và các phương thức truy vấn đơn.
+order: 4000

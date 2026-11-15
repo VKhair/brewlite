@@ -1,0 +1,17 @@
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { CustomerGuard } from './customer.guard';
+
+describe('CustomerGuard', () => {
+  const guard = new CustomerGuard();
+  const contextFor = (role?: string) => ({
+    switchToHttp: () => ({ getRequest: () => ({ user: role ? { role } : undefined }) }),
+  }) as ExecutionContext;
+
+  it('allows customer accounts', () => {
+    expect(guard.canActivate(contextFor('CUSTOMER'))).toBe(true);
+  });
+
+  it.each([undefined, 'BARISTA', 'ADMIN'])('rejects role %s', (role) => {
+    expect(() => guard.canActivate(contextFor(role))).toThrow(ForbiddenException);
+  });
+});

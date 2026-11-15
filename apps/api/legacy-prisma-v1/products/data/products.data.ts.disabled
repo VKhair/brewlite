@@ -1,0 +1,66 @@
+export interface ProductItem {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  stock: number;
+  category: string;
+}
+
+export const SAMPLE_PRODUCTS: ProductItem[] = [
+  {
+    id: 1,
+    name: 'Cà phê sữa đá',
+    description: 'Cà phê Robusta Đắk Lắk đậm đà hòa quyện cùng sữa đặc béo ngậy truyền thống.',
+    price: 35000,
+    imageUrl: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=500&auto=format&fit=crop&q=60',
+    stock: 100,
+    category: 'Cà phê',
+  },
+  {
+    id: 2,
+    name: 'Americano',
+    description: 'Espresso nguyên chất pha loãng với nước ấm/đá, hương vị thanh khiết mộc mạc.',
+    price: 40000,
+    imageUrl: 'https://images.unsplash.com/photo-1551030173-122aabc4489c?w=500&auto=format&fit=crop&q=60',
+    stock: 80,
+    category: 'Cà phê',
+  },
+  {
+    id: 3,
+    name: 'Cappuccino',
+    description: 'Sự kết hợp hoàn hảo giữa Espresso, sữa nóng và lớp bọt sữa dày mịn màng.',
+    price: 45000,
+    imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500&auto=format&fit=crop&q=80',
+    stock: 50,
+    category: 'Cà phê',
+  },
+  {
+    id: 4,
+    name: 'Trà đào cam sả',
+    description: 'Trà thanh mát kết hợp vị đào giòn ngọt, cam tươi mọng nước và hương sả thơm lừng.',
+    price: 39000,
+    imageUrl: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=500&auto=format&fit=crop&q=60',
+    stock: 75,
+    category: 'Trà & Trái cây',
+  },
+  {
+    id: 5,
+    name: 'Bạc xỉu đá',
+    description: 'Nhiều sữa ít cà phê, vị ngọt thơm êm dịu thích hợp cho buổi sáng nhẹ nhàng.',
+    price: 38000,
+    imageUrl: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=500&auto=format&fit=crop&q=60',
+    stock: 90,
+    category: 'Cà phê',
+  },
+  {
+    id: 6,
+    name: 'Matcha Latte',
+    description: 'Bột trà xanh Nhật Bản cao cấp hòa cùng sữa tươi thanh trùng thơm béo.',
+    price: 48000,
+    imageUrl: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=500&auto=format&fit=crop&q=60',
+    stock: 60,
+    category: 'Trà & Trái cây',
+  },
+];

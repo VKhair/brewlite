@@ -1,0 +1,321 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { OrderStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { CouponsService } from '../coupons/coupons.service';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { InventoryService } from '../inventory/inventory.service';
+
+const SIZE_EXTRA: Record<string, number> = {
+  S: 0,
+  M: 6000,
+  L: 10000,
+};
+
+const TOPPING_OPTIONS: Record<string, { name: string; price: number }> = {
+  pearl: { name: 'Trân châu trắng giòn', price: 10000 },
+  cheese: { name: 'Kem Cheese Macchiato', price: 12000 },
+  jelly: { name: 'Thạch sương sáo', price: 8000 },
+  lotus: { name: 'Hạt sen Huế', price: 10000 },
+};
+
+// Định nghĩa các bước chuyển tiếp hợp lệ của Order State Machine
+const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.PENDING]: [
+    OrderStatus.PAID,
+    OrderStatus.PAYMENT_FAILED,
+    OrderStatus.CANCELLED,
+  ],
+  [OrderStatus.PAYMENT_FAILED]: [
+    OrderStatus.PENDING,
+    OrderStatus.CANCELLED,
+  ],
+  [OrderStatus.PAID]: [
+    OrderStatus.PREPARING,
+    OrderStatus.CANCELLED,
+  ],
+  [OrderStatus.PREPARING]: [
+    OrderStatus.READY,
+  ],
+  [OrderStatus.READY]: [
+    OrderStatus.COMPLETED,
+  ],
+  [OrderStatus.COMPLETED]: [], // Trạng thái kết thúc
+  [OrderStatus.CANCELLED]: [], // Trạng thái kết thúc
+};
+
+@Injectable()
+export class OrdersService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly couponsService: CouponsService,
+    private readonly inventory: InventoryService,
+  ) {}
+
+  /**
+   * Kiểm tra chuyển đổi trạng thái hợp lệ theo State Machine (Task 10).
+   * Ném lỗi BadRequestException nếu chuyển đổi không hợp lệ.
+   */
+  assertTransition(currentStatus: OrderStatus, targetStatus: OrderStatus): void {
+    if (currentStatus === targetStatus) {
+      return;
+    }
+    const allowed = VALID_TRANSITIONS[currentStatus] ?? [];
+    if (!allowed.includes(targetStatus)) {
+      throw new BadRequestException(
+        `Chuyển trạng thái không hợp lệ: không thể chuyển từ ${currentStatus} sang ${targetStatus}`,
+      );
+    }
+  }
+
+  async findAll() {
+    return this.prisma.order.findMany({
+      include: {
+        items: true,
+        user: { select: { id: true, name: true, email: true } },
+        payments: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findMine(userOrCustomer?: number | string, customerIdHeader?: string) {
+    let userId: number | undefined;
+    let customerId: string | undefined;
+
+    if (typeof userOrCustomer === 'number') {
+      userId = userOrCustomer;
+      customerId = customerIdHeader;
+    } else if (typeof userOrCustomer === 'string') {
+      customerId = userOrCustomer;
+    }
+
+    if (userId) {
+      return this.prisma.order.findMany({
+        where: { userId },
+        include: { items: true, payments: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    const validCustomerId = this.validateCustomerId(customerId);
+    return this.prisma.order.findMany({
+      where: { customerId: validCustomerId },
+      include: { items: true, payments: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findByCode(orderCode: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { orderCode },
+      include: {
+        items: true,
+        user: { select: { id: true, name: true, email: true } },
+        payments: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Không tìm thấy đơn hàng với mã ${orderCode}`);
+    }
+
+    return order;
+  }
+
+  async create(
+    dto: CreateOrderDto,
+    userId?: number,
+    customerIdHeader?: string,
+  ) {
+    const customerId = userId ? `user-${userId}` : this.validateCustomerId(customerIdHeader);
+
+    return this.prisma.$transaction(async (tx) => {
+      let subtotalAmount = 0;
+      const orderItems: Prisma.OrderItemCreateWithoutOrderInput[] = [];
+
+      // 1. Kiểm tra từng sản phẩm và tính tổng tiền gốc (subtotal)
+      for (const item of dto.items) {
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+        });
+
+        if (!product) {
+          throw new NotFoundException(
+            `Không tìm thấy sản phẩm ID ${item.productId}`,
+          );
+        }
+
+        const toppingIds = [...new Set(item.toppings ?? [])];
+        for (const toppingId of toppingIds) {
+          if (!TOPPING_OPTIONS[toppingId]) {
+            throw new BadRequestException(
+              `Topping "${toppingId}" không hợp lệ`,
+            );
+          }
+        }
+
+        const toppingPrice = toppingIds.reduce(
+          (sum, id) => sum + TOPPING_OPTIONS[id].price,
+          0,
+        );
+
+        const unitPrice =
+          product.price + (SIZE_EXTRA[item.size] ?? 0) + toppingPrice;
+        const lineTotal = unitPrice * item.quantity;
+
+        subtotalAmount += lineTotal;
+
+        orderItems.push({
+          product: { connect: { id: product.id } },
+          productName: product.name,
+          size: item.size,
+          toppings: toppingIds,
+          quantity: item.quantity,
+          unitPrice,
+          subtotal: lineTotal,
+        });
+      }
+
+      const ingredientNeeds = await this.inventory.collectOrderRequirements(tx, dto.items);
+
+      // 2. Xử lý mã khuyến mãi (Coupon) nếu có
+      let discountAmount = 0;
+      let appliedCouponCode: string | undefined = undefined;
+
+      if (dto.couponCode) {
+        const couponResult = await this.couponsService.validateCoupon(
+          dto.couponCode,
+          subtotalAmount,
+        );
+        discountAmount = couponResult.discountAmount;
+        appliedCouponCode = couponResult.code;
+      }
+
+      // 3. Xử lý điểm thưởng tích lũy (Loyalty Points): 10 điểm = 10.000đ (1 điểm = 1.000đ)
+      let pointsUsed = 0;
+      let pointsDiscount = 0;
+
+      if (dto.pointsUsed && dto.pointsUsed > 0) {
+        if (!userId) {
+          throw new BadRequestException(
+            'Chỉ khách hàng có tài khoản đã đăng nhập mới được dùng điểm thưởng',
+          );
+        }
+
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+        });
+
+        if (!user || user.loyaltyPoints < dto.pointsUsed) {
+          throw new BadRequestException(
+            `Bạn chỉ có ${user?.loyaltyPoints ?? 0} điểm thưởng, không đủ ${dto.pointsUsed} điểm`,
+          );
+        }
+
+        const remainingAfterCoupon = Math.max(0, subtotalAmount - discountAmount);
+        const maxPointsCanUse = Math.floor(remainingAfterCoupon / 1000);
+        pointsUsed = Math.min(dto.pointsUsed, maxPointsCanUse);
+        pointsDiscount = pointsUsed * 1000;
+
+        // Trừ điểm của user ngay khi tạo đơn
+        if (pointsUsed > 0) {
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              loyaltyPoints: { decrement: pointsUsed },
+            },
+          });
+        }
+      }
+
+      // 4. Số tiền thực thanh toán cuối cùng
+      const totalAmount = Math.max(
+        0,
+        subtotalAmount - discountAmount - pointsDiscount,
+      );
+
+      // 5. Lưu đơn hàng
+      const order = await tx.order.create({
+        data: {
+          userId: userId ?? null,
+          customerId,
+          subtotalAmount,
+          discountAmount,
+          pointsUsed,
+          pointsDiscount,
+          couponCode: appliedCouponCode ?? null,
+          totalAmount,
+          status: OrderStatus.PENDING,
+          items: {
+            create: orderItems,
+          },
+        },
+        include: {
+          items: true,
+          payments: true,
+        },
+      });
+      await this.inventory.consume(tx, order.id, ingredientNeeds);
+      return order;
+    });
+  }
+
+  /**
+   * Cập nhật trạng thái đơn hàng tuân theo State Machine.
+   * Dùng cho Barista/Admin hoặc kiểm thử.
+   */
+  async updateStatus(orderId: number, targetStatus: OrderStatus) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+      });
+
+      if (!order) {
+        throw new NotFoundException(`Không tìm thấy đơn hàng ID ${orderId}`);
+      }
+
+      // Kiểm tra chuyển tiếp hợp lệ
+      this.assertTransition(order.status, targetStatus);
+
+      // Nếu chuyển sang CANCELLED, hoàn lại tồn kho và hoàn lại điểm đã dùng (nếu có)
+      if (targetStatus === OrderStatus.CANCELLED && order.status !== OrderStatus.CANCELLED) {
+        await this.inventory.reverseOrderConsumption(tx, order.id);
+
+        if (order.userId && order.pointsUsed > 0) {
+          await tx.user.update({
+            where: { id: order.userId },
+            data: {
+              loyaltyPoints: { increment: order.pointsUsed },
+            },
+          });
+        }
+      }
+
+      return tx.order.update({
+        where: { id: order.id },
+        data: { status: targetStatus },
+        include: { items: true, payments: true },
+      });
+    });
+  }
+
+  private validateCustomerId(customerId?: string): string {
+    if (
+      !customerId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        customerId,
+      )
+    ) {
+      throw new BadRequestException(
+        'Thiếu hoặc sai định dạng mã khách hàng',
+      );
+    }
+
+    return customerId.toLowerCase();
+  }
+}

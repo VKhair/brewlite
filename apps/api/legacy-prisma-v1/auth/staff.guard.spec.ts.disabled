@@ -1,0 +1,17 @@
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { StaffGuard } from './staff.guard';
+
+describe('StaffGuard', () => {
+  const guard = new StaffGuard();
+  const contextFor = (role?: string) => ({
+    switchToHttp: () => ({ getRequest: () => ({ user: role ? { role } : undefined }) }),
+  }) as ExecutionContext;
+
+  it.each(['BARISTA', 'ADMIN'])('allows %s', (role) => {
+    expect(guard.canActivate(contextFor(role))).toBe(true);
+  });
+
+  it.each([undefined, 'CUSTOMER'])('rejects role %s', (role) => {
+    expect(() => guard.canActivate(contextFor(role))).toThrow(ForbiddenException);
+  });
+});

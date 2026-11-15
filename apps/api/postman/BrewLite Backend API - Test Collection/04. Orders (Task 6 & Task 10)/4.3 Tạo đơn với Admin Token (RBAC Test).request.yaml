@@ -1,0 +1,29 @@
+$kind: http-request
+url: "{{baseUrl}}/orders"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "items": [
+        {
+          "productId": 1,
+          "size": "S",
+          "quantity": 1
+        }
+      ]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('CustomerGuard chặn Admin đặt đơn với mã 403 Forbidden', function () {
+          pm.response.to.have.status(403);
+      });
+    language: text/javascript
+order: 3000

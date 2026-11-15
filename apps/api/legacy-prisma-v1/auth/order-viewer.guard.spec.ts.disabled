@@ -1,0 +1,45 @@
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { OrderViewerGuard } from './order-viewer.guard';
+
+describe('OrderViewerGuard', () => {
+  const contextFor = (role: string | undefined, userId: number | undefined) => ({
+    switchToHttp: () => ({
+      getRequest: () => ({
+        user: role ? { role, userId } : undefined,
+        params: { orderCode: 'order-1' },
+      }),
+    }),
+  }) as ExecutionContext;
+
+  it.each(['BARISTA', 'ADMIN'])('allows staff role %s', async (role) => {
+    const prisma = { order: { findUnique: jest.fn() } };
+    const guard = new OrderViewerGuard(prisma as any);
+
+    await expect(guard.canActivate(contextFor(role, 99))).resolves.toBe(true);
+    expect(prisma.order.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('allows the customer who owns the order', async () => {
+    const prisma = {
+      order: { findUnique: jest.fn().mockResolvedValue({ userId: 7 }) },
+    };
+    const guard = new OrderViewerGuard(prisma as any);
+
+    await expect(guard.canActivate(contextFor('CUSTOMER', 7))).resolves.toBe(true);
+  });
+
+  it('rejects another customer and missing orders', async () => {
+    const prisma = {
+      order: { findUnique: jest.fn().mockResolvedValue({ userId: 7 }) },
+    };
+    const guard = new OrderViewerGuard(prisma as any);
+
+    await expect(guard.canActivate(contextFor('CUSTOMER', 8))).rejects.toThrow(
+      ForbiddenException,
+    );
+    prisma.order.findUnique.mockResolvedValue(null);
+    await expect(guard.canActivate(contextFor('CUSTOMER', 7))).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+});

@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/orders/code/{{orderCode}}"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Trả về đúng đơn hàng theo orderCode', function () {
+          const res = pm.response.json();
+          pm.expect(res.orderCode).to.eql(pm.environment.get('orderCode'));
+          pm.expect(res.status).to.eql('PENDING');
+      });
+    language: text/javascript
+order: 4000

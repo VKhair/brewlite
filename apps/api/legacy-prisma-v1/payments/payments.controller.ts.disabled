@@ -1,0 +1,19 @@
+import { Body, Controller, Headers, Post, UseGuards } from '@nestjs/common';
+import { CreatePaymentDto } from './dto/create-payment.dto';
+import { PaymentsService } from './payments.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CustomerGuard } from '../auth/customer.guard';
+
+@Controller('payments')
+export class PaymentsController {
+  constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Post()
+  @UseGuards(JwtAuthGuard, CustomerGuard)
+  pay(
+    @Body() dto: CreatePaymentDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
+  ) {
+    return this.paymentsService.pay(dto, idempotencyKeyHeader);
+  }
+}

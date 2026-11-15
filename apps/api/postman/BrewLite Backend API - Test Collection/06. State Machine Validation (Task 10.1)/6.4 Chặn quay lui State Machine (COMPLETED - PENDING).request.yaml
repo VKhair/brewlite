@@ -1,0 +1,28 @@
+$kind: http-request
+name: 6.4 Chặn quay lui State Machine (COMPLETED -> PENDING)
+url: "{{baseUrl}}/orders/{{orderId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "status": "PENDING"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{baristaToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 400 Bad Request', function () {
+          pm.response.to.have.status(400);
+      });
+      pm.test('Thông báo lỗi chặn chuyển trạng thái không hợp lệ', function () {
+          const res = pm.response.json();
+          pm.expect(res.message).to.include('không thể chuyển từ COMPLETED sang PENDING');
+      });
+    language: text/javascript
+order: 4000

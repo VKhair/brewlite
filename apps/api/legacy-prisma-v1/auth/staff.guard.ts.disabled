@@ -1,0 +1,12 @@
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+
+@Injectable()
+export class StaffGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const role = context.switchToHttp().getRequest().user?.role;
+    if (role !== 'BARISTA' && role !== 'ADMIN') {
+      throw new ForbiddenException('Chỉ nhân viên được phép thao tác đơn hàng');
+    }
+    return true;
+  }
+}

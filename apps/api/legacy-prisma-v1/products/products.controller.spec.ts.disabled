@@ -1,0 +1,67 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { SAMPLE_PRODUCTS } from './data/products.data';
+import { ProductsController } from './products.controller';
+import { ProductsService } from './products.service';
+
+describe('ProductsController', () => {
+  let controller: ProductsController;
+
+  const mockProductsService = {
+    findAll: jest.fn().mockResolvedValue(SAMPLE_PRODUCTS),
+    findOne: jest.fn().mockImplementation((id: number) => {
+      const item = SAMPLE_PRODUCTS.find((p) => p.id === id);
+      return Promise.resolve(item);
+    }),
+    create: jest.fn().mockImplementation((dto) => {
+      return Promise.resolve({ id: 10, ...dto });
+    }),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [ProductsController],
+      providers: [
+        {
+          provide: ProductsService,
+          useValue: mockProductsService,
+        },
+      ],
+    }).compile();
+
+    controller = module.get<ProductsController>(ProductsController);
+  });
+
+  it('nên được khởi tạo thành công (defined)', () => {
+    expect(controller).toBeDefined();
+  });
+
+  describe('findAll', () => {
+    it('nên trả về danh sách sản phẩm', async () => {
+      const result = await controller.findAll();
+      expect(result).toEqual(SAMPLE_PRODUCTS);
+      expect(mockProductsService.findAll).toHaveBeenCalled();
+    });
+  });
+
+  describe('findOne', () => {
+    it('nên trả về sản phẩm theo ID', async () => {
+      const result = await controller.findOne(1);
+      expect(result).toEqual(SAMPLE_PRODUCTS[0]);
+      expect(mockProductsService.findOne).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('create', () => {
+    it('nên tạo sản phẩm mới', async () => {
+      const dto = {
+        name: 'Trà sen vàng',
+        price: 45000,
+        imageUrl: 'https://example.com/tra-sen.jpg',
+      };
+      const result = await controller.create(dto);
+      expect(result).toHaveProperty('id', 10);
+      expect(result.name).toBe('Trà sen vàng');
+      expect(mockProductsService.create).toHaveBeenCalledWith(dto);
+    });
+  });
+});

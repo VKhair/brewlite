@@ -1,0 +1,28 @@
+$kind: http-request
+name: 6.3 Đã giao khách hàng (READY -> COMPLETED)
+url: "{{baseUrl}}/orders/{{orderId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "status": "COMPLETED"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{baristaToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Đơn hàng hoàn tất COMPLETED', function () {
+          const res = pm.response.json();
+          pm.expect(res.status).to.eql('COMPLETED');
+      });
+    language: text/javascript
+order: 3000

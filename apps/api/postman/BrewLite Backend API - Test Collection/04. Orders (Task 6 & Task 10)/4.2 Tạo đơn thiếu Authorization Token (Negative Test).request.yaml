@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/orders"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "items": [
+        {
+          "productId": 1,
+          "size": "S",
+          "quantity": 1
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 401 Unauthorized', function () {
+          pm.response.to.have.status(401);
+      });
+    language: text/javascript
+order: 2000

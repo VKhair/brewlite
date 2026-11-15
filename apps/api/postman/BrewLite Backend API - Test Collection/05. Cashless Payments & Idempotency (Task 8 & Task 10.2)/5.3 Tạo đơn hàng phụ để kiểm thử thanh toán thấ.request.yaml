@@ -1,0 +1,35 @@
+$kind: http-request
+name: 5.3 Tạo đơn hàng phụ để kiểm thử thanh toán thất bại
+url: "{{baseUrl}}/orders"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "items": [
+        {
+          "productId": 2,
+          "size": "S",
+          "quantity": 1
+        }
+      ]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 hoặc 201 (Created)', function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+      pm.test('Lưu secondOrderId', function () {
+          const res = pm.response.json();
+          pm.environment.set('secondOrderId', res.id);
+          pm.environment.set('secondOrderCode', res.orderCode);
+      });
+    language: text/javascript
+order: 3000

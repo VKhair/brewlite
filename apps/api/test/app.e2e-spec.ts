@@ -3,14 +3,16 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.JWT_SECRET = 'e2e-test-secret-with-at-least-thirty-two-bytes';
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    }).overrideProvider(PrismaService).useValue({ $queryRaw: jest.fn().mockResolvedValue([{ ok: 1 }]) }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -24,6 +26,6 @@ describe('AppController (e2e)', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    await app?.close();
   });
 });

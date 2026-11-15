@@ -5,9 +5,9 @@
   "author": "BrewLite Team",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/next-server.mjs dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/next-server.mjs start",
     "lint": "eslint",
     "test": "echo \"Frontend test passed\" && exit 0"
   },

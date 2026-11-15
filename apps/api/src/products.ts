@@ -1,32 +1,27 @@
 import { Controller, Get, Injectable, NotFoundException, Param } from '@nestjs/common';
-import { Database } from './database';
+import { PrismaService } from './prisma/prisma.service';
 import { uuidParam } from './validation';
-
-const fields = `id, name, description, base_price AS "basePrice",
-  image_url AS "imageUrl", category, is_available AS "isAvailable"`;
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: PrismaService) {}
 
   async findAll() {
-    const result = await this.db.query(`SELECT ${fields} FROM products
-      WHERE is_available = true ORDER BY name, id`);
-    return result.rows;
+    return (await this.db.product.findMany({ where: { isAvailable: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }))
+      .map(product => ({ id: product.id, name: product.name, description: product.description,
+        basePrice: product.basePrice, imageUrl: product.imageUrl, category: product.category, isAvailable: product.isAvailable }));
   }
 
   async findOne(id: string) {
-    const result = await this.db.query(`SELECT ${fields},
-      COALESCE((SELECT json_agg(s ORDER BY s."priceDelta", s.id) FROM
-        (SELECT id, name, price_delta AS "priceDelta", is_default AS "isDefault"
-         FROM product_sizes WHERE product_id = p.id) s), '[]'::json) AS sizes,
-      COALESCE((SELECT json_agg(t ORDER BY t.name, t.id) FROM
-        (SELECT t.id, t.name, t.price, t.is_available AS "isAvailable"
-         FROM toppings t JOIN product_toppings pt ON pt.topping_id = t.id
-         WHERE pt.product_id = p.id) t), '[]'::json) AS toppings
-      FROM products p WHERE id = $1 AND is_available = true`, [id]);
-    if (!result.rows[0]) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'Product not found' });
-    return result.rows[0];
+    const product = await this.db.product.findFirst({ where: { id, isAvailable: true }, include: {
+      sizes: { orderBy: [{ priceDelta: 'asc' }, { id: 'asc' }] },
+      toppings: { include: { topping: true }, orderBy: [{ topping: { name: 'asc' } }, { toppingId: 'asc' }] },
+    } });
+    if (!product) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'Product not found' });
+    return { id: product.id, name: product.name, description: product.description,
+      basePrice: product.basePrice, imageUrl: product.imageUrl, category: product.category, isAvailable: product.isAvailable,
+      sizes: product.sizes.map(s => ({ id: s.id, name: s.name, priceDelta: s.priceDelta, isDefault: s.isDefault })),
+      toppings: product.toppings.map(({ topping }) => ({ id: topping.id, name: topping.name, price: topping.price, isAvailable: topping.isAvailable })) };
   }
 }
 

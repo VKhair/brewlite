@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/payments"
+method: POST
+headers:
+  Content-Type: application/json
+  Idempotency-Key: "{{idempotencyKey}}"
+body:
+  type: text
+  content: |-
+    {
+      "orderId": {{orderId}},
+      "method": "EWALLET",
+      "simulateSuccess": true,
+      "idempotencyKey": "{{idempotencyKey}}"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      const uuid = pm.variables.replaceIn('{{$guid}}');
+      pm.environment.set('idempotencyKey', uuid);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 hoặc 201', function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+      pm.test('Thanh toán thành công: đơn chuyển PAID, idempotent: false', function () {
+          const res = pm.response.json();
+          pm.expect(res.idempotent).to.be.false;
+          pm.expect(res.payment.status).to.eql('SUCCESS');
+          pm.expect(res.order.status).to.eql('PAID');
+          pm.expect(res.pointsEarned).to.be.greaterThanOrEqual(0);
+      });
+    language: text/javascript
+order: 1000

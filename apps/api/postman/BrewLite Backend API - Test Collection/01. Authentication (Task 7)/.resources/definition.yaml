@@ -1,0 +1,3 @@
+$kind: collection
+description: Kiểm thử Đăng ký, Đăng nhập và trích xuất JWT Token cho 3 vai trò (Customer, Barista, Admin).
+order: 1000

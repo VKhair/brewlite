@@ -1,0 +1,11 @@
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+
+@Injectable()
+export class CustomerGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    if (context.switchToHttp().getRequest().user?.role !== 'CUSTOMER') {
+      throw new ForbiddenException('Khu vực này dành cho tài khoản khách hàng');
+    }
+    return true;
+  }
+}

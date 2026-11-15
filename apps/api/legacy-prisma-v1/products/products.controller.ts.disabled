@@ -1,0 +1,45 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Post,
+} from '@nestjs/common';
+import { CreateProductDto, ProductResponseDto } from './dto/product.dto';
+import { ProductsService } from './products.service';
+
+@Controller('products')
+export class ProductsController {
+  constructor(private readonly productsService: ProductsService) {}
+
+  /**
+   * GET /products
+   * Lấy danh sách toàn bộ sản phẩm (menu cà phê / đồ uống)
+   */
+  @Get()
+  async findAll(): Promise<ProductResponseDto[]> {
+    return this.productsService.findAll();
+  }
+
+  /**
+   * GET /products/:id
+   * Xem chi tiết sản phẩm theo ID
+   */
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id: number): Promise<ProductResponseDto> {
+    return this.productsService.findOne(id);
+  }
+
+  /**
+   * POST /products
+   * Thêm sản phẩm mới; tồn kho khả dụng được tính từ recipe nguyên liệu.
+   */
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(@Body() createProductDto: CreateProductDto): Promise<ProductResponseDto> {
+    return this.productsService.create(createProductDto);
+  }
+}

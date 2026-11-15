@@ -1,0 +1,49 @@
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateOrderItemDto {
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @IsString()
+  @IsIn(['S', 'M', 'L'])
+  size!: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  toppings?: string[] = [];
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  quantity!: number;
+}
+
+export class CreateOrderDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => CreateOrderItemDto)
+  items!: CreateOrderItemDto[];
+
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pointsUsed?: number;
+}

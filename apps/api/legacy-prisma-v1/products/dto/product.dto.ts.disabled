@@ -1,0 +1,35 @@
+import { IsInt, IsNotEmpty, IsOptional, IsPositive, IsString } from 'class-validator';
+
+export class CreateProductDto {
+  @IsString({ message: 'Tên sản phẩm phải là chuỗi ký tự' })
+  @IsNotEmpty({ message: 'Tên sản phẩm không được để trống' })
+  name: string;
+
+  @IsString({ message: 'Mô tả phải là chuỗi ký tự' })
+  @IsOptional()
+  description?: string;
+
+  @IsInt({ message: 'Giá sản phẩm phải là số nguyên' })
+  @IsPositive({ message: 'Giá sản phẩm phải lớn hơn 0' })
+  price: number;
+
+  @IsString({ message: 'Đường dẫn ảnh phải là chuỗi ký tự' })
+  @IsNotEmpty({ message: 'Đường dẫn ảnh không được để trống' })
+  imageUrl: string;
+
+  @IsString({ message: 'Danh mục phải là chuỗi ký tự' })
+  @IsOptional()
+  category?: string;
+}
+
+export class ProductResponseDto {
+  id: number;
+  name: string;
+  description?: string | null;
+  price: number;
+  imageUrl: string;
+  stock: number;
+  category: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}

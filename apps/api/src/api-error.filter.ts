@@ -1,7 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
-const databaseConflicts = new Set(['23503', '23505', '23514', '23P01']);
+const databaseConflicts = new Set(['23503', '23505', '23514', '23P01', 'P2002', 'P2003', 'P2004', 'P2014']);
 const concurrencyErrors = new Set(['40001', '40P01', '55P03']);
 const unavailableErrors = new Set(['ECONNREFUSED', 'ECONNRESET', 'EPIPE', 'ETIMEDOUT',
   'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', '53300', '57P01', '57P02', '57P03']);
@@ -40,7 +40,7 @@ export class ApiErrorFilter implements ExceptionFilter {
       }
     } else if (dbCode && (unavailableErrors.has(dbCode) || dbCode.startsWith('08'))) {
       status = 503; code = 'SERVICE_UNAVAILABLE'; message = 'Service temporarily unavailable';
-    } else if (dbCode && concurrencyErrors.has(dbCode)) {
+    } else if (dbCode && (concurrencyErrors.has(dbCode) || dbCode === 'P2034')) {
       status = 409; code = 'CONCURRENT_MODIFICATION'; message = 'Data changed concurrently. Please refresh and try again';
     } else if (dbCode && databaseConflicts.has(dbCode)) {
       status = 409; code = 'DATA_CONFLICT'; message = 'Request conflicts with current data';

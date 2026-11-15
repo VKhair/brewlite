@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/payments"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "orderId": {{secondOrderId}},
+      "method": "EWALLET",
+      "simulateSuccess": true
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 400 Bad Request', function () {
+          pm.response.to.have.status(400);
+      });
+    language: text/javascript
+order: 5000

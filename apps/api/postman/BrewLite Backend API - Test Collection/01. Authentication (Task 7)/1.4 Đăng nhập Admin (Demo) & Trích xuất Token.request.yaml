@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{adminEmail}}",
+      "password": "{{adminPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Xác nhận role ADMIN và gán adminToken', function () {
+          const res = pm.response.json();
+          pm.expect(res).to.have.property('accessToken');
+          pm.environment.set('adminToken', res.accessToken);
+          pm.expect(res.user.role).to.eql('ADMIN');
+      });
+    language: text/javascript
+order: 4000

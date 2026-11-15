@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/inventory/ingredients"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('AdminGuard chặn Customer với mã 403 Forbidden', function () {
+          pm.response.to.have.status(403);
+      });
+    language: text/javascript
+order: 2000

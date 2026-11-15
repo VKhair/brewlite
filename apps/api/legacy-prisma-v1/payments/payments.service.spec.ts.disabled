@@ -1,0 +1,211 @@
+import { BadRequestException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { OrderStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { OrdersService } from '../orders/orders.service';
+import { PaymentsService } from './payments.service';
+import { InventoryService } from '../inventory/inventory.service';
+
+describe('PaymentsService - Idempotency & Payments (Task 10 Tiêu chí B)', () => {
+  let service: PaymentsService;
+  const prisma = {
+    payment: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    order: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    user: {
+      update: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  };
+
+  const ordersService = {
+    assertTransition: jest.fn(),
+  };
+  const inventoryService = {
+    reverseOrderConsumption: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PaymentsService,
+        {
+          provide: PrismaService,
+          useValue: prisma,
+        },
+        {
+          provide: OrdersService,
+          useValue: ordersService,
+        },
+        {
+          provide: InventoryService,
+          useValue: inventoryService,
+        },
+      ],
+    }).compile();
+
+    service = module.get<PaymentsService>(PaymentsService);
+  });
+
+  it('bắt buộc phải có Idempotency-Key', async () => {
+    await expect(
+      service.pay({
+        orderId: 1,
+        method: 'EWALLET',
+        simulateSuccess: true,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('gửi 2 lần cùng Idempotency-Key trả về kết quả cũ và KHÔNG thực hiện thanh toán lần 2 (Idempotent)', async () => {
+    const idempotencyKey = 'key-uuid-1234-5678';
+    const mockExistingPayment = {
+      id: 10,
+      orderId: 1,
+      idempotencyKey,
+      amount: 45000,
+      method: 'EWALLET',
+      status: 'SUCCESS',
+      createdAt: new Date(),
+      order: {
+        id: 1,
+        totalAmount: 45000,
+        status: OrderStatus.PAID,
+        items: [],
+      },
+    };
+
+    // Lần 1: Prisma tìm thấy key đã tồn tại
+    prisma.payment.findUnique.mockResolvedValue(mockExistingPayment);
+
+    const result = await service.pay(
+      {
+        orderId: 1,
+        method: 'EWALLET',
+        simulateSuccess: true,
+      },
+      idempotencyKey,
+    );
+
+    expect(result.idempotent).toBe(true);
+    expect(result.payment.id).toBe(10);
+    // Khẳng định $transaction KHÔNG được gọi lại (không trừ tiền, không cộng điểm lần 2)
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.payment.create).not.toHaveBeenCalled();
+  });
+
+  it('thanh toán mới thành công: cập nhật đơn PAID, tạo Payment và tích lũy điểm thưởng', async () => {
+    const idempotencyKey = 'key-new-9999';
+    // Lần đầu: chưa tồn tại key
+    prisma.payment.findUnique.mockResolvedValue(null);
+
+    const mockOrder = {
+      id: 2,
+      userId: 5,
+      totalAmount: 50000, // 50k => được 5 điểm
+      status: OrderStatus.PENDING,
+      items: [],
+    };
+
+    const mockPayment = {
+      id: 11,
+      orderId: 2,
+      idempotencyKey,
+      amount: 50000,
+      method: 'BANK_CARD',
+      status: 'SUCCESS',
+    };
+
+    prisma.$transaction.mockImplementation(async (callback: any) => {
+      const tx = {
+        order: {
+          findUnique: jest.fn().mockResolvedValue(mockOrder),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({
+            ...mockOrder,
+            status: OrderStatus.PAID,
+            pointsEarned: 5,
+          }),
+        },
+        user: {
+          update: jest.fn().mockResolvedValue({ id: 5, loyaltyPoints: 55 }),
+        },
+        payment: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue(mockPayment),
+        },
+      };
+      return callback(tx);
+    });
+
+    const result = await service.pay(
+      {
+        orderId: 2,
+        method: 'BANK_CARD',
+        simulateSuccess: true,
+      },
+      idempotencyKey,
+    );
+
+    expect(result.idempotent).toBe(false);
+    expect(result.pointsEarned).toBe(5);
+    expect(result.order.status).toBe(OrderStatus.PAID);
+    expect(ordersService.assertTransition).toHaveBeenCalledWith(
+      OrderStatus.PENDING,
+      OrderStatus.PAID,
+    );
+  });
+
+  it('hoàn nguyên nguyên liệu khi thanh toán thất bại', async () => {
+    const idempotencyKey = 'key-failed-123';
+    prisma.payment.findUnique.mockResolvedValue(null);
+    const mockOrder = {
+      id: 3,
+      userId: 5,
+      totalAmount: 50000,
+      pointsUsed: 2,
+      status: OrderStatus.PENDING,
+      items: [{ productId: 1, quantity: 1 }],
+    };
+
+    prisma.$transaction.mockImplementation(async (callback: any) => callback({
+      order: {
+        findUnique: jest.fn().mockResolvedValue(mockOrder),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({
+          ...mockOrder,
+          status: OrderStatus.PAYMENT_FAILED,
+          pointsEarned: 0,
+        }),
+      },
+      user: {
+        update: jest.fn().mockResolvedValue({ id: 5, loyaltyPoints: 7 }),
+      },
+      payment: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({
+          id: 12,
+          orderId: 3,
+          idempotencyKey,
+          status: 'FAILED',
+        }),
+      },
+    }));
+
+    await service.pay(
+      { orderId: 3, method: 'EWALLET', simulateSuccess: false },
+      idempotencyKey,
+    );
+
+    expect(inventoryService.reverseOrderConsumption).toHaveBeenCalledWith(
+      expect.anything(),
+      3,
+    );
+  });
+});

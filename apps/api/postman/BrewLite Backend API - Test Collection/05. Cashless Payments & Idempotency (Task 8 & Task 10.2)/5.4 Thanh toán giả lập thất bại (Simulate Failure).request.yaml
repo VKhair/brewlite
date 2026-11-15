@@ -1,0 +1,37 @@
+$kind: http-request
+url: "{{baseUrl}}/payments"
+method: POST
+headers:
+  Content-Type: application/json
+  Idempotency-Key: "{{failKey}}"
+body:
+  type: text
+  content: |-
+    {
+      "orderId": {{secondOrderId}},
+      "method": "CARD",
+      "simulateSuccess": false,
+      "idempotencyKey": "{{failKey}}"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      const uuid = pm.variables.replaceIn('{{$guid}}');
+      pm.variables.set('failKey', uuid);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 hoặc 201', function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+      pm.test('Đơn chuyển PAYMENT_FAILED, hoàn tồn kho', function () {
+          const res = pm.response.json();
+          pm.expect(res.payment.status).to.eql('FAILED');
+          pm.expect(res.order.status).to.eql('PAYMENT_FAILED');
+      });
+    language: text/javascript
+order: 4000

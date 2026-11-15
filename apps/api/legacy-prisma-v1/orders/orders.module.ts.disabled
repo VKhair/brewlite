@@ -1,0 +1,17 @@
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module';
+import { CouponsModule } from '../coupons/coupons.module';
+import { OrdersController } from './orders.controller';
+import { OrdersService } from './orders.service';
+import { InventoryModule } from '../inventory/inventory.module';
+import { CustomerGuard } from '../auth/customer.guard';
+import { StaffGuard } from '../auth/staff.guard';
+import { OrderViewerGuard } from '../auth/order-viewer.guard';
+
+@Module({
+  imports: [PrismaModule, CouponsModule, InventoryModule],
+  controllers: [OrdersController],
+  providers: [OrdersService, CustomerGuard, StaffGuard, OrderViewerGuard],
+  exports: [OrdersService],
+})
+export class OrdersModule {}

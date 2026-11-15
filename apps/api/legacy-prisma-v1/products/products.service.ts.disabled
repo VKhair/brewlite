@@ -1,0 +1,104 @@
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { SAMPLE_PRODUCTS } from './data/products.data';
+import { CreateProductDto, ProductResponseDto } from './dto/product.dto';
+import { InventoryService } from '../inventory/inventory.service';
+
+interface ProductRecord extends Omit<ProductResponseDto, 'stock'> {}
+
+@Injectable()
+export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+  // Dữ liệu mẫu in-memory phục vụ chạy offline / khi chưa bật Docker PostgreSQL
+  private inMemoryProducts = [...SAMPLE_PRODUCTS];
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly inventory: InventoryService,
+  ) {}
+
+  /**
+   * Lấy danh sách toàn bộ sản phẩm (menu)
+   */
+  async findAll(): Promise<ProductResponseDto[]> {
+    if (this.prisma.isConnected) {
+      try {
+        const products: ProductRecord[] = await (this.prisma as any).product.findMany({
+          orderBy: { id: 'asc' },
+        });
+        if (products.length > 0) {
+          const stocks = await this.inventory.getStocks(products);
+          return products.map((product: ProductRecord): ProductResponseDto => ({ ...product, stock: stocks.get(product.id) ?? 0 }));
+        }
+      } catch (error) {
+        this.logger.warn('Lỗi khi truy vấn Prisma, chuyển sang dữ liệu mẫu fallback:', error);
+      }
+    }
+    // Trả về dữ liệu mẫu fallback
+    return this.inMemoryProducts.map((product) => ({ ...product, stock: 0 }));
+  }
+
+  /**
+   * Lấy chi tiết một sản phẩm theo ID
+   */
+  async findOne(id: number): Promise<ProductResponseDto> {
+    if (this.prisma.isConnected) {
+      try {
+        const product = await (this.prisma as any).product.findUnique({
+          where: { id },
+        });
+        if (product) {
+          const stocks = await this.inventory.getStocks([product]);
+          return { ...product, stock: stocks.get(product.id) ?? 0 };
+        }
+      } catch (error) {
+        this.logger.warn(`Lỗi khi tìm sản phẩm ${id} qua Prisma, kiểm tra dữ liệu mẫu:`, error);
+      }
+    }
+
+    const item = this.inMemoryProducts.find((p) => p.id === id);
+    if (!item) {
+      throw new NotFoundException(`Không tìm thấy sản phẩm với ID ${id}`);
+    }
+    return { ...item, stock: 0 };
+  }
+
+  /**
+   * Thêm sản phẩm mới (hỗ trợ lưu DB hoặc in-memory)
+   */
+  async create(createProductDto: CreateProductDto): Promise<ProductResponseDto> {
+    if (this.prisma.isConnected) {
+      try {
+        const product = await (this.prisma as any).product.create({
+          data: {
+            name: createProductDto.name,
+            description: createProductDto.description,
+            price: createProductDto.price,
+            imageUrl: createProductDto.imageUrl,
+            category: createProductDto.category ?? 'Cà phê',
+          },
+        });
+        return { ...product, stock: 0 };
+      } catch (error) {
+        this.logger.warn('Lỗi tạo sản phẩm qua Prisma, lưu tạm in-memory:', error);
+      }
+    }
+
+    const newId = this.inMemoryProducts.length > 0
+      ? Math.max(...this.inMemoryProducts.map((p) => p.id)) + 1
+      : 1;
+
+    const newProduct: ProductResponseDto = {
+      id: newId,
+      name: createProductDto.name,
+      description: createProductDto.description ?? '',
+      price: createProductDto.price,
+      imageUrl: createProductDto.imageUrl,
+      stock: 0,
+      category: createProductDto.category ?? 'Cà phê',
+    };
+
+    this.inMemoryProducts.push(newProduct as any);
+    return newProduct;
+  }
+}

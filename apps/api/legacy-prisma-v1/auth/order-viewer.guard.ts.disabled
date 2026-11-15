@@ -1,0 +1,31 @@
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Injectable()
+export class OrderViewerGuard implements CanActivate {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+    const orderCode = request.params.orderCode;
+
+    if (user?.role === 'BARISTA' || user?.role === 'ADMIN') {
+      return true;
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { orderCode },
+      select: { userId: true },
+    });
+    if (!order || order.userId !== user?.userId) {
+      throw new ForbiddenException('Bạn không có quyền xem đơn hàng này');
+    }
+    return true;
+  }
+}

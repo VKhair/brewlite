@@ -1,0 +1,3 @@
+$kind: collection
+description: Kiểm thử vòng đời đơn hàng PENDING -> PAID -> PREPARING -> READY -> COMPLETED và chặn chuyển trạng thái sai.
+order: 6000

@@ -1,0 +1,23 @@
+$kind: http-request
+name: 2.1 Lấy danh sách sản phẩm GET /products
+url: "{{baseUrl}}/products"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code là 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Trả về danh sách sản phẩm hợp lệ', function () {
+          const res = pm.response.json();
+          pm.expect(Array.isArray(res)).to.be.true;
+          pm.expect(res.length).to.be.greaterThan(0);
+          const firstItem = res[0];
+          pm.expect(firstItem).to.have.property('id');
+          pm.expect(firstItem).to.have.property('name');
+          pm.expect(firstItem).to.have.property('price');
+          pm.expect(firstItem).to.have.property('stock');
+          pm.expect(firstItem).to.have.property('category');
+      });
+    language: text/javascript
+order: 1000

@@ -1,0 +1,18 @@
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { AdminGuard } from './admin.guard';
+
+describe('AdminGuard', () => {
+  const guard = new AdminGuard();
+  const contextFor = (role?: string) => ({
+    switchToHttp: () => ({ getRequest: () => ({ user: role ? { role } : undefined }) }),
+  }) as ExecutionContext;
+
+  it('allows an ADMIN', () => {
+    expect(guard.canActivate(contextFor('ADMIN'))).toBe(true);
+  });
+
+  it('rejects customers and missing users', () => {
+    expect(() => guard.canActivate(contextFor('CUSTOMER'))).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(contextFor())).toThrow(ForbiddenException);
+  });
+});

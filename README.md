@@ -51,51 +51,51 @@ brewlite/
 ## 3. Hướng dẫn cài đặt và Khởi chạy cục bộ (Local Setup)
 
 ### 3.1. Yêu cầu môi trường
-- **Node.js:** phiên bản `20.x LTS` hoặc `24.x` (khuyến nghị dùng `npm >= 10.0.0`).
+- **Node.js:** phiên bản `20.12+` hoặc `24.x` (khuyến nghị dùng `npm >= 10.0.0`).
 - **Docker & Docker Compose:** để chạy container PostgreSQL.
 - **Git:** phiên bản mới nhất.
 
-### 3.2. Các bước khởi chạy chi tiết
+### 3.2. Chạy nhanh toàn bộ hệ thống bằng Docker Compose
 
-#### Bước 1: Sao chép biến môi trường
-Tạo tệp `.env` tại thư mục gốc từ tệp mẫu:
+1. Tạo `.env` từ `.env.example` nếu chưa có. Nếu `.env` đã tồn tại, giữ các secret hiện tại và bổ sung các khóa cấu hình còn thiếu.
+2. Từ thư mục repository, chạy:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   Compose khởi động PostgreSQL, chạy schema/seed lặp an toàn trước API, sau đó khởi động web. Stack này dùng project name và cổng riêng để tránh thay đổi các container BrewLite khác đang chạy.
+
+3. Mở các địa chỉ local mặc định:
+   - Web: [http://localhost:3002](http://localhost:3002)
+   - API health (kèm kiểm tra PostgreSQL): [http://localhost:3003/health](http://localhost:3003/health)
+   - PostgreSQL: `localhost:5433`
+
+Dừng stack bằng `docker compose down`. Dữ liệu PostgreSQL được giữ trong volume `brewlite-mvp_postgres_data`.
+
+### 3.3. Chạy chế độ phát triển với hot reload
+
+Giữ Compose chạy PostgreSQL, sau đó cài dependencies và khởi tạo dữ liệu:
+
 ```bash
-cp .env.example .env
+npm ci
+docker compose up -d postgres
+npm run db:setup
 ```
-Cập nhật các giá trị cấu hình nếu cần (mặc định đã sẵn sàng cho môi trường local).
 
-#### Bước 2: Khởi động cơ sở dữ liệu PostgreSQL
-Khởi chạy PostgreSQL qua Docker Compose:
+Mở hai terminal tại thư mục repository:
+
 ```bash
-docker compose up -d
+npm run dev:api
 ```
-Cơ sở dữ liệu sẽ chạy tại cổng `localhost:5433` (hoặc `5432` theo cấu hình `.env`).
 
-#### Bước 3: Cài đặt các gói phụ thuộc (Dependencies)
-Cài đặt toàn bộ dependencies cho cả root và các workspaces:
 ```bash
-npm install
+npm run dev:web
 ```
 
-#### Bước 4: Khởi chạy ứng dụng ở chế độ Development
+Nếu đang chạy full stack bằng Compose, dừng hai service ứng dụng trước bằng `docker compose stop web api` để giải phóng cổng; PostgreSQL vẫn chạy. Web dùng proxy cùng origin tới API. Các cổng được cấu hình trong `.env` (`WEB_PORT`, `API_PORT`, `POSTGRES_PORT`). Lệnh `npm run user:staff -- email@example.com` nâng tài khoản đã đăng ký thành nhân viên để gọi API đổi trạng thái đơn.
 
-- **Chạy đồng thời cả Frontend và Backend API:**
-  ```bash
-  npm run dev
-  ```
-- **Hoặc chạy riêng lẻ từng phân hệ:**
-  - Chạy Backend API (NestJS - cổng `3001`):
-    ```bash
-    npm run dev:api
-    ```
-  - Chạy Frontend Web (Next.js - cổng `3000`):
-    ```bash
-    npm run dev:web
-    ```
-
-Mở trình duyệt và truy cập:
-- **Giao diện người dùng Web:** [http://localhost:3000](http://localhost:3000)
-- **API Health Check Endpoint:** [http://localhost:3001/health](http://localhost:3001/health)
+Thanh toán mặc định là mô phỏng; không cần VNPay key và không thu tiền thật. Có thể bật VNPay Sandbox bằng `PAYMENT_MODE=vnpay`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET` và `VNPAY_RETURN_URL`. Địa chỉ IPN phải truy cập được từ VNPay; `localhost` chỉ phù hợp phát triển qua tunnel, không nhận callback từ Internet. Khi deploy, cấu hình URL public HTTPS cho cả return/IPN. Mã nguồn hiện hỗ trợ tạo URL ký HMAC-SHA512 và xác minh callback. Sau khi cập nhật `.env`, chạy lại `docker compose up -d --build` để bật lựa chọn VNPay trên web.
 
 ---
 

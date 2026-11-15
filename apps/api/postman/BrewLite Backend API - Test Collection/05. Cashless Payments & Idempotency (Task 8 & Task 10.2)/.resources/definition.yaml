@@ -1,0 +1,3 @@
+$kind: collection
+description: Kiểm thử thanh toán không tiền mặt, sinh Idempotency-Key và kiểm tra Replay giao dịch.
+order: 5000

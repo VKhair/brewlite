@@ -18,6 +18,10 @@ jobs:
     name: Install · Lint · Test · Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Prisma 7 loads DATABASE_URL from its config even for client generation.
+      # This placeholder is never used for a database connection in CI.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/brewlite_ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +34,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
 
       - name: Lint
         run: npm run lint

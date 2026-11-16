@@ -26,7 +26,7 @@ function aws(action, args, parseOutput = true) {
     encoding: 'utf8',
     timeout: 180_000,
   });
-  // AWS may include request values in errors. Never print raw output.
+  // AWS có thể đưa dữ liệu yêu cầu vào thông báo lỗi, nên chỉ ghi tên thao tác và mã thoát.
   if (result.status !== 0) throw new Error(`Lightsail ${action} failed (exit ${result.status ?? 'unavailable'}).`);
   if (!parseOutput || !result.stdout.trim()) return {};
   try {
@@ -173,7 +173,7 @@ try {
   if (!snapshotReady) throw new Error('Pre-deploy database snapshot did not become available.');
   console.log(`Database snapshot ready: ${snapshot}`);
 
-  // First release has no catalog. Seed explicitly through a one-off bootstrap deployment.
+  // Tạo danh mục demo trong một lượt triển khai riêng khi phát hành lần đầu.
   const bootstrap = !previousApi.currentDeployment && env.BREWLITE_BOOTSTRAP_CATALOG === 'true';
   const attempted = new Set();
   try {

@@ -1,6 +1,6 @@
 @startuml
-' BrewLite Task 2.2: checkout with VNPay Sandbox
-' Sandbox-only integration; production payment is out of scope.
+' BrewLite Task 2.2. Đặt và thanh toán đơn qua VNPay Sandbox.
+' Luồng thanh toán chỉ dùng môi trường thử nghiệm VNPay Sandbox.
 skinparam monochrome true
 skinparam shadowing false
 skinparam sequenceMessageAlign center

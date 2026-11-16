@@ -1,4 +1,4 @@
--- Load only into a disposable test database after the normal demo seed.
+-- Chỉ nạp vào cơ sở dữ liệu kiểm thử dùng riêng sau khi đã tạo dữ liệu demo.
 BEGIN;
 INSERT INTO products (id, name, base_price, image_url, category, is_available, stock)
 SELECT md5('brewlite-perf-product-' || n)::uuid, 'Test drink ' || n,

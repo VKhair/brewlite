@@ -7,7 +7,8 @@ COPY apps/web/package.json apps/web/package.json
 RUN npm ci
 
 COPY apps/api apps/api
-RUN npm run build:api
+# Prisma loads its config during client generation. No DB connection is made.
+RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/brewlite_build npm run build:api
 
 FROM node:24-alpine AS runner
 

@@ -9,6 +9,9 @@ dist
 .env
 .env.*
 .env.local
+**/.env
+**/.env.*
+**/*.tsbuildinfo
 apps/api/generated
 apps/api/src/generated
 apps/api/postman

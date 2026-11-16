@@ -16,14 +16,15 @@ type Payment = {
 export default function Checkout() {
   const { cart, total, session, ready, clear } = useStore(),
     router = useRouter();
-  const [method, setMethod] = useState<"EWALLET" | "CARD" | "VNPAY">("EWALLET"),
+  const vnpayEnabled = process.env.NEXT_PUBLIC_PAYMENT_MODE === "vnpay";
+  const [mockMethod, setMethod] = useState<"EWALLET" | "CARD">("EWALLET"),
     [failDemo, setFailDemo] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [pendingOrder, setPendingOrder] = useState<string | null>(null);
   const inFlight = useRef(false);
   const key = useRef<string | null>(null);
-  const vnpayEnabled = process.env.NEXT_PUBLIC_PAYMENT_MODE === "vnpay";
+  const method = vnpayEnabled ? "VNPAY" : mockMethod;
   useEffect(() => {
     if (ready && !session) router.replace("/login?next=%2Fcheckout");
   }, [ready, session, router]);
@@ -118,77 +119,69 @@ export default function Checkout() {
       <div className="cart-layout">
         <div className="panel">
           <h2>Phương thức thanh toán</h2>
-          <p className="muted">
-            Đây là thanh toán <strong>giả lập</strong> phục vụ bài tập lớn,
-            không thu tiền thật.
-          </p>
-          <label
-            className={`payment-option ${method === "EWALLET" ? "selected" : ""}`}
-          >
-            <span className="payment-emoji">📱</span>
-            <span>
-              <strong>Ví điện tử</strong>
-              <small>Thanh toán nhanh qua ví (mô phỏng)</small>
-            </span>
-            <input
-              type="radio"
-              name="payment"
-              checked={method === "EWALLET"}
-              onChange={() => {
-                setMethod("EWALLET");
-                key.current = null;
-              }}
-            />
-          </label>
-          <label
-            className={`payment-option ${method === "CARD" ? "selected" : ""}`}
-          >
-            <span className="payment-emoji">💳</span>
-            <span>
-              <strong>Thẻ ngân hàng</strong>
-              <small>Thanh toán bằng thẻ (mô phỏng)</small>
-            </span>
-            <input
-              type="radio"
-              name="payment"
-              checked={method === "CARD"}
-              onChange={() => {
-                setMethod("CARD");
-                key.current = null;
-              }}
-            />
-          </label>
-          {vnpayEnabled && (
-            <label
-              className={`payment-option ${method === "VNPAY" ? "selected" : ""}`}
-            >
+          {vnpayEnabled ? (
+            <div className="payment-option selected">
               <span className="payment-emoji">🏦</span>
               <span>
                 <strong>VNPay Sandbox</strong>
-                <small>Thanh toán thử nghiệm qua VNPay</small>
+                <small>Chọn nguồn tiền trên trang thanh toán VNPay</small>
               </span>
-              <input
-                type="radio"
-                name="payment"
-                checked={method === "VNPAY"}
-                onChange={() => {
-                  setMethod("VNPAY");
-                  key.current = null;
-                }}
-              />
-            </label>
+            </div>
+          ) : (
+            <>
+              <p className="muted">
+                Đây là thanh toán <strong>giả lập</strong> phục vụ bài tập lớn,
+                không thu tiền thật.
+              </p>
+              <label
+                className={`payment-option ${method === "EWALLET" ? "selected" : ""}`}
+              >
+                <span className="payment-emoji">📱</span>
+                <span>
+                  <strong>Ví điện tử</strong>
+                  <small>Thanh toán nhanh qua ví (mô phỏng)</small>
+                </span>
+                <input
+                  type="radio"
+                  name="payment"
+                  checked={method === "EWALLET"}
+                  onChange={() => {
+                    setMethod("EWALLET");
+                    key.current = null;
+                  }}
+                />
+              </label>
+              <label
+                className={`payment-option ${method === "CARD" ? "selected" : ""}`}
+              >
+                <span className="payment-emoji">💳</span>
+                <span>
+                  <strong>Thẻ ngân hàng</strong>
+                  <small>Thanh toán bằng thẻ (mô phỏng)</small>
+                </span>
+                <input
+                  type="radio"
+                  name="payment"
+                  checked={method === "CARD"}
+                  onChange={() => {
+                    setMethod("CARD");
+                    key.current = null;
+                  }}
+                />
+              </label>
+              <label className="demo-toggle">
+                <input
+                  type="checkbox"
+                  checked={failDemo}
+                  onChange={(e) => {
+                    setFailDemo(e.target.checked);
+                    key.current = null;
+                  }}
+                />{" "}
+                Mô phỏng giao dịch thất bại (để kiểm thử)
+              </label>
+            </>
           )}
-          <label className="demo-toggle">
-            <input
-              type="checkbox"
-              checked={failDemo}
-              onChange={(e) => {
-                setFailDemo(e.target.checked);
-                key.current = null;
-              }}
-            />{" "}
-            Mô phỏng giao dịch thất bại (để kiểm thử)
-          </label>
           <div className="customer-box">
             <strong>👤 Thông tin khách hàng</strong>
             <p>

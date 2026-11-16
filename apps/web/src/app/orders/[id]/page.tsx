@@ -14,6 +14,7 @@ type PaymentMethod = "EWALLET" | "CARD";
 type PaymentResult = {
   paymentStatus: string;
   message: string;
+  checkoutUrl?: string;
 };
 
 function errorMessage(error: unknown, fallback: string) {
@@ -37,6 +38,11 @@ export default function OrderDetail() {
   const [method, setMethod] = useState<PaymentMethod>("EWALLET");
 
   const token = session?.access_token;
+  const vnpayEnabled = process.env.NEXT_PUBLIC_PAYMENT_MODE === "vnpay";
+  const pendingVnpay = order?.payments?.some(
+    (payment) =>
+      payment.paymentMethod === "VNPAY" && payment.status === "PENDING",
+  );
 
   // Tự động lấy thông tin đơn hàng
   useEffect(() => {
@@ -133,18 +139,21 @@ export default function OrderDetail() {
           },
           body: JSON.stringify({
             orderId: id,
-            paymentMethod: method,
-            mockOutcome: "SUCCESS",
+            ...(vnpayEnabled
+              ? { paymentMethod: "VNPAY" }
+              : { paymentMethod: method, mockOutcome: "SUCCESS" }),
           }),
         },
         token,
       );
 
-      if (result.paymentStatus === "SUCCESS") {
+      if (result.checkoutUrl) {
+        window.location.assign(result.checkoutUrl);
+      } else if (result.paymentStatus === "SUCCESS") {
         router.push(`/success/${id}`);
       } else {
-        setError(result.message);
         await load();
+        setError(result.message);
       }
     } catch (err) {
       setError(errorMessage(err, "Thanh toán không thành công"));
@@ -233,25 +242,33 @@ export default function OrderDetail() {
                 <div className="order-tools">
                   <h3>Thanh toán đơn này</h3>
 
-                  <select
-                    value={method}
-                    onChange={(event) =>
-                      setMethod(event.target.value as PaymentMethod)
-                    }
-                    aria-label="Phương thức thanh toán"
-                  >
-                    <option value="EWALLET">Ví điện tử (giả lập)</option>
+                  {vnpayEnabled ? (
+                    <p>VNPay Sandbox</p>
+                  ) : (
+                    <select
+                      value={method}
+                      onChange={(event) =>
+                        setMethod(event.target.value as PaymentMethod)
+                      }
+                      aria-label="Phương thức thanh toán"
+                    >
+                      <option value="EWALLET">Ví điện tử (giả lập)</option>
 
-                    <option value="CARD">Thẻ ngân hàng (giả lập)</option>
-                  </select>
+                      <option value="CARD">Thẻ ngân hàng (giả lập)</option>
+                    </select>
+                  )}
 
                   <button className="btn" onClick={pay} disabled={busy}>
-                    {busy ? "Đang xử lý..." : "Thanh toán lại ↗"}
+                    {busy
+                      ? "Đang xử lý..."
+                      : pendingVnpay
+                        ? "Tiếp tục thanh toán ↗"
+                        : "Thanh toán lại ↗"}
                   </button>
                 </div>
               )}
 
-              {["PENDING", "PAYMENT_FAILED"].includes(order.status) && (
+              {order.status === "PENDING" && !pendingVnpay && (
                 <button className="danger-btn" disabled={busy} onClick={cancel}>
                   Hủy đơn hàng
                 </button>

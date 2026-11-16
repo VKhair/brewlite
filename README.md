@@ -95,7 +95,14 @@ npm run dev:web
 
 Nếu đang chạy full stack bằng Compose, dừng hai service ứng dụng trước bằng `docker compose stop web api` để giải phóng cổng; PostgreSQL vẫn chạy. Web dùng proxy cùng origin tới API. Các cổng được cấu hình trong `.env` (`WEB_PORT`, `API_PORT`, `POSTGRES_PORT`). Lệnh `npm run user:staff -- email@example.com` nâng tài khoản đã đăng ký thành nhân viên để gọi API đổi trạng thái đơn.
 
-Thanh toán mặc định là mô phỏng; không cần VNPay key và không thu tiền thật. Có thể bật VNPay Sandbox bằng `PAYMENT_MODE=vnpay`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET` và `VNPAY_RETURN_URL`. Địa chỉ IPN phải truy cập được từ VNPay; `localhost` chỉ phù hợp phát triển qua tunnel, không nhận callback từ Internet. Khi deploy, cấu hình URL public HTTPS cho cả return/IPN. Mã nguồn hiện hỗ trợ tạo URL ký HMAC-SHA512 và xác minh callback. Sau khi cập nhật `.env`, chạy lại `docker compose up -d --build` để bật lựa chọn VNPay trên web.
+Thanh toán mặc định dùng chế độ mô phỏng. Để chạy VNPay Sandbox bằng Docker Compose:
+
+1. Đặt `PAYMENT_MODE=vnpay`, `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` trong `.env` local. Giữ khóa ký ở backend.
+2. Dùng HTTPS tunnel trỏ đến API local cổng `3003`. Đặt `VNPAY_RETURN_URL=https://<tunnel>/payments/vnpay/return` và `VNPAY_FRONTEND_URL=http://localhost:3002` nếu dùng cổng mặc định.
+3. Đăng ký `https://<tunnel>/payments/vnpay/ipn` với VNPay cho Terminal ID sandbox. Biến `VNPAY_IPN_URL` trong `.env` ghi lại địa chỉ đã đăng ký. Nếu tunnel đổi tên miền, cập nhật cả hai URL và đăng ký lại IPN.
+4. Chạy `docker compose up -d --build`. Vào checkout để mở cổng sandbox và thử giao dịch thành công hoặc hủy. Return URL đưa trình duyệt về trang kết quả. Trạng thái đơn cập nhật khi API nhận IPN hợp lệ.
+
+Hướng dẫn kỹ thuật và dữ liệu kiểm thử có trên [trang tài liệu VNPay Sandbox](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html).
 
 ---
 

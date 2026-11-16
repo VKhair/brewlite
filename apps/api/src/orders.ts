@@ -117,7 +117,10 @@ export class OrdersService {
   }
   async cancel(userId: string, orderId: string) {
     return this.db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
       const order = await this.row(tx, orderId, userId, true);
+      const pending = await tx.payment.findFirst({ where: { orderId, paymentMethod: 'VNPAY', status: 'PENDING' } });
+      if (pending) throw new ConflictException({ code: 'PAYMENT_PENDING', message: 'Đơn đang chờ VNPay xác nhận kết quả.' });
       assertTransition(order.status, 'CANCELLED');
       await this.stock(tx, order.items, false);
       await this.inventory.reverseOrderConsumption(tx, orderId);

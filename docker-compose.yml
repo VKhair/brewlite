@@ -28,6 +28,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-brewlite-local-only-jwt-secret-change-before-deploy}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       PAYMENT_MODE: ${PAYMENT_MODE:-mock}
+      BREWLITE_SEED_ON_START: "true"
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
       VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}

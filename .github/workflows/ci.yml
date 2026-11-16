@@ -5,44 +5,68 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
-    name: Install · Lint · Test · Build
+    name: Quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # Prisma 7 loads DATABASE_URL from its config even for client generation.
-      # This placeholder is never used for a database connection in CI.
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/brewlite_ci
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:integration
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Generate Prisma Client
-        run: npm run db:generate
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
+  browser:
+    name: Browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_PROJECT_NAME: brewlite-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      PAYMENT_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: docker compose --env-file .env.example up -d --build --wait --wait-timeout 120
+      - run: npm run test:e2e
+      - name: Verify migrations preserve the checkout data
+        run: |
+          docker compose --env-file .env.example exec -T api node apps/api/scripts/migrate.cjs
+          docker compose --env-file .env.example exec -T postgres sh -eu -c '
+            result=$(psql -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT count(*) FROM orders WHERE status = '\''PAID'\''")
+            test "$result" -eq 2
+          '
+      - name: Collect Compose logs on failure
+        if: failure()
+        run: docker compose --env-file .env.example logs --no-color > compose.log
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure
+          path: |
+            compose.log
+            apps/web/test-results/
+      - if: always()
+        run: docker compose --env-file .env.example down --volumes

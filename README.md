@@ -106,66 +106,36 @@ Hướng dẫn kỹ thuật và dữ liệu kiểm thử có trên [trang tài l
 
 ---
 
-## 4. Kiểm thử và Kiểm soát chất lượng (Quality Gates)
+## 4. Kiểm thử và kiểm soát chất lượng
 
-Toàn bộ quy trình kiểm thử và kiểm tra cú pháp được tự động hóa đồng bộ trên monorepo:
-
-### 4.1. Kiểm tra cú pháp và định dạng (Linting)
-Chạy kiểm tra cú pháp trên toàn bộ mã nguồn (Oxlint cho API và ESLint cho Web):
-```bash
+```sh
+npm ci
+npm run db:generate
 npm run lint
-```
-*Chạy riêng:* `npm run lint:api` hoặc `npm run lint:web`.
-
-### 4.2. Kiểm thử tự động (Testing)
-Chạy bộ kiểm thử Unit Test cho toàn bộ workspace:
-```bash
 npm test
-```
-*Chạy riêng:* `npm run test:api` hoặc `npm run test:web`.
-
-### 4.3. Kiểm thử tích hợp (Integration Tests)
-Chạy bộ kiểm thử tích hợp API với cơ sở dữ liệu in-memory PGlite:
-```bash
+npm run build
 npm run test:integration
 ```
 
-### 4.4. Đóng gói sản phẩm (Production Build)
-Biên dịch cả Backend NestJS và Frontend Next.js sẵn sàng cho môi trường triển khai:
-```bash
-npm run build
+`npm test` chạy unit API. Integration dùng PostgreSQL nhúng PGlite, cần build API trước và không cần DB Docker. CI của PR và `main` chạy hai required checks `Quality` và `Browser E2E`.
+
+Chạy Playwright trên stack **dùng riêng** với DB mới. Đặt `PAYMENT_MODE=mock` trong môi trường shell nếu đã có giá trị khác. Các ví dụ dùng cổng mặc định, cần giải phóng cổng trước khi chạy.
+
+```sh
+npx playwright install chromium
+docker compose -p brewlite-e2e --env-file .env.example up -d --build --wait
+npm run test:e2e
+docker compose -p brewlite-e2e --env-file .env.example down --volumes
 ```
-*Chạy riêng:* `npm run build:api` hoặc `npm run build:web`.
+
+Lệnh cuối xóa volume của stack E2E dùng riêng. Nếu đổi cổng Web, đặt `BREWLITE_E2E_URL` tương ứng. Khi test lỗi, xem trace trong `apps/web/test-results` hoặc tải artifact `browser-failure` từ Actions.
+
+## 5. Triển khai và rollback
+
+Workflow release chỉ triển khai tag `v*` thuộc `main` sau khi hai job CI đạt. Xem hướng dẫn thiết lập OIDC, VNPay Sandbox, migration, smoke và phục hồi phiên bản. Ghi URL thực tế và kết quả nghiệm thu vào hồ sơ bàn giao. [Hướng dẫn Lightsail](docs/deployment.md) · [Hồ sơ bàn giao](docs/acceptance.md)
 
 ---
 
-## 5. Triển khai (Deployment) và Kế hoạch Phục hồi (Rollback)
-
-Theo thiết kế kiến trúc tại [`docs/deployment.md`](docs/deployment.md) và [`docs/architecture/adr/0005-aws-lightsail.md`](docs/architecture/adr/0005-aws-lightsail.md):
-
-### 5.1. Mô hình triển khai Production (AWS Lightsail)
-- **Frontend Container Service:** Chạy Next.js Web App, mở cổng HTTPS công khai đón người dùng và hỗ trợ PWA.
-- **Backend API Container Service:** Chạy NestJS API, mở HTTPS nhận API request từ Web và webhook thanh toán.
-- **Managed PostgreSQL Database:** Vận hành ở chế độ **Private Mode**, chỉ cho phép kết nối nội bộ từ Backend API trong cùng AWS Region; tuyệt đối không mở cổng công khai ra Internet.
-
-### 5.2. Pipeline Tự động hóa CI/CD
-1. **Pull Request Quality Gate:** Mỗi PR vào nhánh `main` phải vượt qua pipeline GitHub Actions (`Install` $\rightarrow$ `Lint` $\rightarrow$ `Test` $\rightarrow$ `Build`).
-2. **Đóng gói & Triển khai:** Khi tag phiên bản mới hoặc push vào `main`, pipeline đóng gói Docker Image gắn tag Git Commit SHA và triển khai lên AWS Lightsail.
-3. **Kiểm tra sau triển khai (Smoke Test):** Gọi tự động endpoint `GET /health` để xác minh trạng thái sẵn sàng của dịch vụ và kết nối database.
-
-### 5.3. Quy trình Rollback sự cố (< 5 phút)
-Khi phát hiện lỗi nghiêm trọng sau khi triển khai phiên bản mới:
-1. Truy cập AWS Lightsail Console hoặc dùng AWS CLI chuyển active deployment về bản snapshot/image tag SHA ổn định trước đó:
-   ```bash
-   aws lightsail create-container-service-deployment \
-     --service-name brewlite-api \
-     --containers file://deployments/rollback-containers.json \
-     --public-endpoint file://deployments/rollback-endpoint.json
-   ```
-2. Thực hiện rollback database migration (nếu có thay đổi schema) về phiên bản tương thích.
-3. Kiểm tra lại endpoint `GET /health` để đảm bảo hệ thống đã phục hồi trạng thái hoạt động bình thường trong thời gian dưới 5 phút theo chỉ tiêu **NFR-12**.
-
----
 
 ## 6. Danh mục tài liệu kỹ thuật dự án
 

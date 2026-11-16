@@ -31,14 +31,15 @@
     "lint": "npm run lint --workspaces --if-present",
     "lint:api": "npm run lint --workspace=api",
     "lint:web": "npm run lint --workspace=web",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test:api",
     "test:api": "npm run test --workspace=api",
     "test:web": "npm run test --workspace=web",
     "test:integration": "npm run test:integration --workspace=api --if-present",
     "build": "npm run build --workspaces --if-present",
     "build:api": "npm run build --workspace=api",
     "build:web": "npm run build --workspace=web",
-    "clean": "node -e \"const fs = require('fs'); ['dist', '.next', 'apps/api/dist', 'apps/web/.next'].forEach(p => fs.rmSync(p, { recursive: true, force: true }));\""
+    "clean": "node -e \"const fs = require('fs'); ['dist', '.next', 'apps/api/dist', 'apps/web/.next'].forEach(p => fs.rmSync(p, { recursive: true, force: true }));\"",
+    "test:e2e": "npm run test:web"
   },
   "engines": {
     "node": ">=20.12.0",

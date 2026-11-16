@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { api, Product, money, emoji, drinkPhoto } from "../lib/api";
+import { api, Product, money, drinkPhoto } from "../lib/api";
 import { useStore } from "../lib/store";
 export function Header() {
   const { count, session, signout } = useStore();
@@ -116,17 +117,23 @@ export function Footer() {
     </footer>
   );
 }
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product, first }: { product: Product; first: boolean }) {
+  const photo = drinkPhoto(product.name, product.category, product.imageUrl);
   return (
     <Link className="product-card" href={`/product/${product.id}`}>
       <div
         className={`drink-art art-${product.category.toLowerCase().replace(/[^a-z0-9]/g, "")}`}
       >
-        <img
+        <Image
           className="drink-photo"
-          src={drinkPhoto(product.name, product.category, product.imageUrl)}
+          src={photo}
           alt={`Ảnh ${product.name}`}
-          loading="lazy"
+          width={350}
+          height={350}
+          sizes="(max-width: 600px) 50vw, (max-width: 900px) 33vw, 280px"
+          loading={first ? "eager" : "lazy"}
+          fetchPriority={first ? "high" : undefined}
+          unoptimized={!photo.startsWith("/images/")}
         />
         <span className="bubble b1" />
         <span className="bubble b2" />
@@ -223,8 +230,8 @@ export function MenuProducts({ limit }: { limit?: number }) {
         </div>
       ) : view.length ? (
         <div className="product-grid">
-          {view.map((p) => (
-            <ProductCard key={p.id} product={p} />
+          {view.map((p, index) => (
+            <ProductCard key={p.id} product={p} first={index === 0} />
           ))}
         </div>
       ) : (

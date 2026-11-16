@@ -35,12 +35,12 @@ UI -> API: POST /payments (orderId, VNPAY, Idempotency-Key)
 API -> DB: Đọc đơn và kiểm tra chủ sở hữu/trạng thái
 API -> DB: Lưu Payment attempt + mã tham chiếu duy nhất
 API -> API: Ký request bằng secret phía server
-API --> UI: paymentUrl
+API --> UI: checkoutUrl
 UI -> Customer: Chuyển hướng sang VNPay
 Customer -> VNP: Chọn nguồn tiền, xác nhận giao dịch sandbox
 
 == Thông báo và xác minh ==
-VNP -> API: IPN (mã tham chiếu, amount, response, chữ ký)
+VNP -> API: GET /payments/vnpay/ipn (ref, amount, chữ ký)
 API -> API: Xác minh chữ ký và đối chiếu đơn/amount/reference
 alt IPN không hợp lệ hoặc dữ liệu không khớp
   API --> VNP: Từ chối/không cập nhật đơn
@@ -58,8 +58,10 @@ end
 
 == Quay về và hiển thị trạng thái ==
 VNP --> Customer: Return URL (chỉ điều hướng, không phải xác nhận)
+Customer -> API: GET /payments/vnpay/return
+API --> Customer: 302 /success/{id}
 Customer -> UI: Mở trang kết quả
-UI -> API: GET /orders/{id} hoặc GET /payments/{ref}
+UI -> API: GET /orders/{id} (JWT)
 API -> DB: Đọc trạng thái đã xác minh
 DB --> API: PENDING / PAID / PAYMENT_FAILED
 API --> UI: Trạng thái authoritative
@@ -76,13 +78,13 @@ end
 == Thử lại sau thất bại đã xác nhận ==
 opt Khách chọn thử lại trên cùng đơn
   Customer -> UI: Thử lại thanh toán
-  UI -> API: POST /orders/{id}/retry (JWT)
+  UI -> API: POST /payments (cùng orderId, JWT, khóa mới)
   API -> DB: BEGIN; kiểm tra/giữ tồn kho lại
   alt Đủ tồn kho
-    API -> DB: PAYMENT_FAILED -> PENDING; COMMIT
-    API --> UI: Cho phép payment attempt mới
-    UI -> API: POST /payments (cùng orderId, Idempotency-Key mới)
-    API -> VNP: Tạo giao dịch VNPay mới, ref mới
+    API -> DB: Đơn PENDING và Payment attempt mới; COMMIT
+    API -> API: Ký URL VNPay với mã tham chiếu mới
+    API --> UI: checkoutUrl
+    UI --> Customer: Chuyển hướng tới VNPay
   else Không đủ tồn kho
     API -> DB: ROLLBACK
     API --> UI: Yêu cầu cập nhật giỏ hàng

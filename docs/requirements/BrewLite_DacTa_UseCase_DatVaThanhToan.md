@@ -112,7 +112,7 @@ Các tiêu chí dưới đây **truy vết về mã AC có sẵn trong SRS**, kh
 
 | Use-case theo sơ đồ tổng quát | Yêu cầu SRS | API / Thành phần | Vai trò trong Task 1.3 |
 | --- | --- | --- | --- |
-| UC-06 – Quản lý giỏ hàng | FR-04; FR-16 (Should) | Zustand/localStorage phía web | Chuẩn bị giỏ; giữ/xóa giỏ theo kết quả |
+| UC-06 – Quản lý giỏ hàng | FR-04; FR-16 (Should) | lib/store.tsx và localStorage | Chuẩn bị giỏ; giữ/xóa giỏ theo kết quả |
 | UC-09 – Đăng nhập & JWT | FR-06 | `POST /auth/login`; JWT Guard | Tiền điều kiện cho UC-11; hoàn tất nếu phiên chưa xác thực |
 | **UC-11 – Tạo đơn hàng** | **FR-07** | `POST /orders` | Luồng chính |
 | UC-12 – Kiểm tra dữ liệu & tồn kho | FR-07; NFR-08 | OrdersService, transaction/InventoryService | `include` của UC-11 |
@@ -145,5 +145,5 @@ Tệp **`docs/diagrams/BrewLite_DatVaThanhToan.puml`** là nguồn chỉnh sửa
 - **UC-09:** là tiền điều kiện của checkout; UC-11 chỉ được thực hiện bởi Member đã xác thực. Nếu chưa có JWT, khách hoàn tất đăng nhập rồi tiếp tục. Không dùng `include` vì đăng nhập không chạy mỗi lần checkout.
 - **UC-18:** là phần mở rộng tùy điều kiện của UC-13, chỉ chạy khi backend xác minh giao dịch thành công; dùng `extend` thay cho `include`.
 - **VNPay Sandbox:** hệ thống ngoài BrewLite; `PaymentsService` là adapter nội bộ. Merchant secret nằm phía backend trong cấu hình môi trường. Return URL không được dùng làm bằng chứng thanh toán; IPN phải xác minh chữ ký và dữ liệu giao dịch.
-- **Thử lại thanh toán:** sau IPN thất bại đã xác minh, thử lại trên cùng đơn tạo Payment attempt và khóa mới; mất phản hồi của attempt hiện tại dùng lại khóa cũ. Đây là yêu cầu tài liệu, không phải xác nhận việc code đã triển khai.
+- **Thử lại thanh toán:** sau IPN thất bại đã xác minh, gọi POST /payments với cùng orderId và khóa mới. Khi mất phản hồi, gửi lại cùng yêu cầu với khóa cũ. Return URL chuyển hướng đến trang kết quả, trình duyệt đọc trạng thái qua GET /orders/:id.
 - **Kiểm soát tồn kho:** SRS nêu Optimistic Locking; báo cáo hiện thực ghi nhận cập nhật tồn kho nguyên tử có điều kiện. Đặc tả nghiệp vụ giữ mục tiêu không oversell; kỹ thuật triển khai cần đối chiếu trong Task 2/3.

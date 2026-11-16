@@ -9,7 +9,7 @@ actor "Customer" as customer
 cloud "Internet" as internet {
   node "VNPay Sandbox" as vnp
   artifact "GitHub Repository" as repo
-  artifact "GitHub Actions\n(CI/CD - planned)" as actions
+  artifact "GitHub Actions\n(CI and release workflow)" as actions
 }
 
 node "AWS Account" as aws {
@@ -30,15 +30,15 @@ node "AWS Account" as aws {
 }
 
 customer --> webService : HTTPS
-customer --> apiService : HTTPS API calls\nNEXT_PUBLIC_API_URL
-apiService --> customer : Payment URL response
+customer --> apiService : HTTPS Return URL
+apiService --> customer : Redirect to Web result
 customer --> vnp : Redirect using payment URL
 vnp --> apiService : IPN · HTTPS
-vnp ..> webService : Return URL via browser
-web --> apiService : Server-side API calls\nif used
-api --> db : Private network\nDATABASE_URL
+vnp ..> customer : Return URL via browser
+web --> apiService : HTTP proxy\nprivate domain:3001
+api --> db : Private network\nTLS verify-full
 
-repo ..> actions : Workflow trigger
+repo ..> actions : PR or main for CI\nv* tag on main for CD
 actions ..> webImages : Build/push Web image\nSHA tag
 actions ..> apiImages : Build/push API image\nSHA tag
 webImages ..> webService : Create deployment
@@ -46,17 +46,17 @@ apiImages ..> apiService : Create deployment
 
 note bottom of lightsail
 All Lightsail resources must use the same Region.
-Topology is a target; AWS resources are not provisioned yet.
+Endpoint names and Region are recorded after provisioning.
 end note
 
 note bottom of apiService
-CORS allowlist for Web origin; JWT and request validation.
+JWT and request validation on authenticated endpoints.
 Verify VNPay IPN signature. Return URL does not confirm payment.
 end note
 
 note bottom of db
 Keep database private. GitHub-hosted runner cannot connect directly;
-run migrations from a Lightsail-side job/runner.
+API startup applies migrations within Lightsail.
 end note
 
 @enduml

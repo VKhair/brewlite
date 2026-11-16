@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "node scripts/next-server.mjs start",
     "lint": "eslint",
-    "test": "echo \"Frontend test passed\" && exit 0"
+    "test": "playwright test"
   },
   "dependencies": {
     "next": "16.4.6",
@@ -17,6 +17,7 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -45,7 +45,7 @@
 - INT-03 `checkout, failed payment, retry and duplicate idempotency preserve stock and order state`
 - INT-04 `coupon, points ledger and ingredient recipes are persisted transactionally`
 
-Chạy INT-01 đến INT-04 với `npm run build:api` rồi `npm run test:integration`. Nguồn ở [prisma.integration.test.cjs](../apps/api/test/prisma.integration.test.cjs).
+Chạy INT-01 đến INT-04 với `npm run build:api` rồi `npm run test:integration`, dùng PostgreSQL test qua `TEST_DATABASE_URL` hoặc `DATABASE_URL`. Nguồn ở [prisma.integration.test.cjs](../apps/api/test/prisma.integration.test.cjs).
 
 - E2E-01 `mobile checkout confirms the order and shows it in history`
 - E2E-02 `failed payment preserves the cart and retries the same order`

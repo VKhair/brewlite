@@ -117,7 +117,7 @@ npm run build
 npm run test:integration
 ```
 
-`npm test` chạy unit API. Integration dùng PostgreSQL nhúng PGlite, cần build API trước và không cần DB Docker. CI của PR và `main` chạy hai required checks `Quality` và `Browser E2E`.
+`npm test` chạy unit API. Integration cần build API và PostgreSQL test đang chạy, với `TEST_DATABASE_URL` hoặc `DATABASE_URL` trỏ tới DB đó. Có thể chạy `docker compose up -d --wait postgres` với cấu hình local trước khi chạy integration. Các ca integration tạo và dọn schema riêng. CI của PR và `main` chạy hai required checks `Quality` và `Browser E2E`.
 
 Chạy Playwright trên stack **dùng riêng** với DB mới. Đặt `PAYMENT_MODE=mock` trong môi trường shell nếu đã có giá trị khác. Các ví dụ dùng cổng mặc định, cần giải phóng cổng trước khi chạy.
 

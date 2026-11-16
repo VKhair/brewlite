@@ -4,6 +4,7 @@
 
 - CI chạy lint, build, unit API, integration, hai ca Playwright và kiểm tra migration chạy lại vẫn giữ đơn đã thanh toán.
 - VNPay integration dùng IPN mô phỏng với dữ liệu test. Giao dịch Sandbox qua endpoint HTTPS được ghi riêng ở lần nghiệm thu production.
+- Ruleset [protectmain](https://github.com/VKhair/brewlite/rules/26506039) yêu cầu `Quality` và `Browser E2E`. [Lần CI thất bại trên PR #22](https://github.com/VKhair/brewlite/actions/runs/43838101409) cho thấy runner chưa có PostgreSQL cho integration. PR bị chặn, sau đó CI được sửa để khởi tạo PostgreSQL 16 riêng cho job `Quality`.
 
 ## Kết quả đo local ngày 16/11/2026
 

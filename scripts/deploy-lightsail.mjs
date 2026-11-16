@@ -7,12 +7,12 @@ import { setTimeout } from 'node:timers/promises';
 const env = process.env;
 const required = [
   'LIGHTSAIL_API', 'LIGHTSAIL_WEB', 'LIGHTSAIL_DB', 'DATABASE_URL',
-  'JWT_SECRET', 'VNPAY_TMN_CODE', 'VNPAY_HASH_SECRET', 'GITHUB_SHA',
+  'JWT_SECRET', 'VNPAY_TMN_CODE', 'VNPAY_HASH_SECRET', 'BREWLITE_RELEASE_SHA',
 ];
 for (const name of required) {
   if (!env[name]) throw new Error(`Missing configuration: ${name}`);
 }
-const sha = env.GITHUB_SHA;
+const sha = env.BREWLITE_RELEASE_SHA;
 if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('Invalid commit SHA.');
 if (env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET must contain at least 32 characters.');
 
@@ -21,14 +21,19 @@ const api = env.LIGHTSAIL_API;
 const web = env.LIGHTSAIL_WEB;
 const db = env.LIGHTSAIL_DB;
 
-function aws(action, args) {
+function aws(action, args, parseOutput = true) {
   const result = spawnSync('aws', ['lightsail', action, ...args, '--output', 'json', '--no-cli-pager'], {
     encoding: 'utf8',
     timeout: 180_000,
   });
   // AWS may include request values in errors. Never print raw output.
   if (result.status !== 0) throw new Error(`Lightsail ${action} failed (exit ${result.status ?? 'unavailable'}).`);
-  return result.stdout.trim() ? JSON.parse(result.stdout) : {};
+  if (!parseOutput || !result.stdout.trim()) return {};
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new Error(`Lightsail ${action} returned invalid JSON.`);
+  }
 }
 
 function service(name) {
@@ -53,9 +58,17 @@ function pushImage(name, app, args = []) {
   const result = spawnSync('docker', ['build', '--platform', 'linux/amd64', '-f', `apps/${app}/Dockerfile`,
     '-t', image, ...args, '.'], { stdio: 'inherit' });
   if (result.status !== 0) throw new Error(`Docker build failed for ${app}.`);
-  const { containerImage } = aws('push-container-image', ['--service-name', name, '--label', sha, '--image', image]);
-  if (!containerImage?.image) throw new Error(`No published image returned for ${app}.`);
-  return containerImage.image;
+  aws('push-container-image', ['--service-name', name, '--label', sha, '--image', image], false);
+  const { containerImages = [] } = aws('get-container-images', ['--service-name', name]);
+  const prefix = `:${name}.${sha}.`;
+  const versions = containerImages
+    .map(({ image }) => image)
+    .filter((ref) => ref.startsWith(prefix))
+    .map((ref) => Number(ref.slice(prefix.length)))
+    .filter(Number.isInteger);
+  const version = Math.max(...versions);
+  if (version < 1) throw new Error(`No published image returned for ${app}.`);
+  return prefix + version;
 }
 
 function endpoint(containerName, containerPort, path) {
@@ -71,7 +84,10 @@ async function deploy(name, manifest) {
   for (let attempt = 0; attempt < 48; attempt++) {
     const { deployments } = aws('get-container-service-deployments', ['--service-name', name]);
     const state = deployments?.find((deployment) => deployment.version === version)?.state;
-    if (state === 'ACTIVE') return;
+    if (state === 'ACTIVE') {
+      console.log(`${name} deployment ${version} active.`);
+      return;
+    }
     if (state === 'FAILED' || state === 'INACTIVE') throw new Error(`${name} deployment ${version}: ${state}.`);
     await setTimeout(10_000);
   }

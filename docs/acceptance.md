@@ -5,6 +5,28 @@
 - CI chạy lint, build, unit API, integration, hai ca Playwright và kiểm tra migration chạy lại vẫn giữ đơn đã thanh toán.
 - VNPay integration dùng IPN mô phỏng với dữ liệu test. Giao dịch Sandbox qua endpoint HTTPS được ghi riêng ở lần nghiệm thu production.
 
+## Kết quả đo local ngày 16/11/2026
+
+Môi trường gồm Windows với Intel Core i5-13500H, API/Web chạy Docker Compose và PostgreSQL 16 trên cùng máy. API đã warm, catalog có 20 sản phẩm khả dụng, gồm 17 dòng giả lập dành cho phép đo. Chạy tuần tự 20 mẫu mỗi endpoint, bỏ vòng warm-up. Giao dịch ghi đặt từng món từ seed demo và trả kết quả mock.
+
+| Chỉ tiêu | Ngưỡng SRS | Kết quả đo | Đánh giá |
+|---|---|---|---|
+| NFR-01 · GET /products | < 500 ms | p95 5,2 ms · max 8,3 ms | Đạt trong môi trường đo |
+| NFR-02 · POST /orders | < 1000 ms | p95 16,6 ms · max 17,7 ms | Đạt trong môi trường đo |
+| NFR-02 · POST /payments | < 1000 ms | p95 19,2 ms · max 21,9 ms | Đạt trong môi trường đo mock |
+| NFR-03 · FCP | ≤ 1,8 s | 0,87 s | Đạt trong lần đo |
+| NFR-03 · LCP | ≤ 2,5 s | 3,87 s | Chưa đạt |
+
+Lighthouse 13.6.0 đo `/menu` sau khi chuyển ảnh menu sang Next Image. Lần đo dùng Edge headless, cấu hình mobile mặc định của Lighthouse và 4G mô phỏng với RTT 150 ms và throughput 1638,4 Kbps. Đo lại với cùng thiết lập sau khi deploy HTTPS.
+
+Để lặp phép đo, dùng stack test riêng chạy mock ở cổng mặc định. Fixture bổ sung 17 món. Script tạo đơn và thanh toán mock trên DB test.
+
+```sh
+docker compose -p brewlite-e2e --env-file .env.example exec -T postgres psql -v ON_ERROR_STOP=1 -U postgres -d brewlite < apps/api/test/fixtures/performance.sql
+node scripts/measure-local.mjs
+npx lighthouse@13.6.0 http://127.0.0.1:3002/menu --only-categories=performance --chrome-flags=--headless
+```
+
 ## Biên bản production cần điền sau khi chạy
 
 - Tag, SHA và link CI/CD.

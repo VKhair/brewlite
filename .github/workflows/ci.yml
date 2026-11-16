@@ -33,6 +33,8 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run test:integration
+      - name: Verify required-check rejection (intentional failure)
+        run: exit 1
 
   browser:
     name: Browser E2E

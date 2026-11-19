@@ -1,169 +1,162 @@
-@startuml BrewLite
-title BREWLITE - DOMAIN CLASS DIAGRAM\nTask 2.3 - Domain Model
-
-skinparam classAttributeIconSize 0
+@startuml
+title BrewLite — Mô hình dữ liệu Prisma
+!pragma layout smetana
 skinparam shadowing false
-skinparam linetype ortho
-skinparam ArrowColor #526579
-skinparam class {
-  BackgroundColor #f8fbff
-  BorderColor #4776a8
-  HeaderBackgroundColor #dcebfa
-}
-skinparam enum {
-  BackgroundColor #f8fbff
-  BorderColor #4776a8
-}
+skinparam classAttributeIconSize 0
+hide empty methods
 
-' ===================== CLASSES =====================
-class User {
-  + id: UUID
-  + fullName: String
-  + email: String {unique}
-  + passwordHash: String
-  + phone: String
-  + role: UserRole
-  + loyaltyPoints: Integer
-  + createdAt: DateTime
-  --
-  + addLoyaltyPoints(points): void
-  + useLoyaltyPoints(points): Boolean
-}
-
-class Order {
-  + id: UUID
-  + orderCode: String {unique}
-  + subtotalAmount: Decimal
-  + promotionDiscount: Decimal
-  + loyaltyDiscount: Decimal
-  + totalAmount: Decimal
-  + status: OrderStatus
-  + createdAt: DateTime
-  + updatedAt: DateTime
-  --
-  + calculateTotal(): Decimal
-  + changeStatus(status): void
-  + canBeCancelled(): Boolean
+package "Danh mục" {
+  class Product {
+    id: UUID
+    basePrice: Int
+    isAvailable: Boolean
+    stock: Int
+  }
+  class ProductSize {
+    id: UUID
+    name: String
+    priceDelta: Int
+    isDefault: Boolean
+  }
+  class Topping {
+    id: UUID
+    name: String
+    price: Int
+    isAvailable: Boolean
+  }
+  class ProductTopping {
+    productId: UUID
+    toppingId: UUID
+  }
 }
 
-class LoyaltyTransaction {
-  + id: UUID
-  + points: Integer
-  + type: LoyaltyTransactionType
-  + description: String
-  + createdAt: DateTime
+package "Đơn, thanh toán và tài khoản" {
+  class User {
+    id: UUID
+    email: String
+    passwordHash: String
+    role: String
+    loyaltyPoints: Int
+  }
+  class Order {
+    id: UUID
+    orderCode: String
+    status: String
+    subtotalAmount: Int
+    discountAmount: Int
+    totalAmount: Int
+    couponCode: String?
+    items: Json
+  }
+  class OrderItem <<ItemSnapshot>> {
+    productId: UUID
+    productName: String
+    sizeId: UUID
+    sizeName: String
+    toppings: Json
+    quantity: Int
+    unitPrice: Int
+    lineTotal: Int
+  }
+  enum OrderStatus {
+    PENDING
+    PAID
+    PREPARING
+    READY
+    COMPLETED
+    PAYMENT_FAILED
+    CANCELLED
+  }
+  enum PaymentStatus {
+    PENDING
+    SUCCESS
+    FAILED
+  }
+  class OrderStatusHistory {
+    id: UUID
+    sequence: BigInt
+    fromStatus: String?
+    toStatus: String
+    actorId: UUID
+  }
+  class Payment {
+    id: UUID
+    idempotencyKey: UUID
+    paymentMethod: String
+    status: String
+    amount: Int
+    providerTxnRef: String?
+    paymentUrl: String?
+    response: Json
+  }
+  class Coupon <<Promotion>> {
+    id: UUID
+    code: String
+    discountPercent: Int?
+    discountAmount: Int?
+    minOrderAmount: Int
+    maxDiscount: Int?
+    isActive: Boolean
+  }
+  class LoyaltyTransaction {
+    id: UUID
+    points: Int
+    type: String
+  }
 }
 
-class Product {
-  + id: UUID
-  + name: String
-  + description: String
-  + basePrice: Decimal
-  + imageUrl: String
-  + category: String
-  + stock: Integer
-  + isAvailable: Boolean
-  --
-  + hasStock(quantity): Boolean
-  + decreaseStock(quantity): void
-  + restoreStock(quantity): void
+package "Kho" {
+  class Ingredient {
+    id: Int
+    name: String
+    unit: String
+    onHand: Decimal
+  }
+  class ProductRecipe {
+    id: Int
+    size: String
+    quantity: Decimal
+  }
+  class ToppingRecipe {
+    id: Int
+    quantity: Decimal
+  }
+  class InventoryMovement {
+    id: Int
+    type: String
+    quantity: Decimal
+    reason: String
+  }
 }
 
-class OrderItem {
-  + id: UUID
-  + productName: String
-  + size: String
-  + toppingNames: String[*]
-  + note: String
-  + quantity: Integer
-  + unitPrice: Decimal
-  + subtotal: Decimal
-  --
-  + calculateSubtotal(): Decimal
-}
+Product "1" -- "0..*" ProductSize
+Product "1" -- "0..*" ProductTopping
+Topping "1" -- "0..*" ProductTopping
+User "1" -- "0..*" Order
+Order "1" *-- "1..*" OrderItem : snapshot
+Order ..> OrderStatus : giá trị nghiệp vụ
+Payment ..> PaymentStatus : giá trị nghiệp vụ
+User "1" -- "0..*" OrderStatusHistory : actor
+Order "1" -- "0..*" OrderStatusHistory
+Order "1" -- "0..*" Payment
+User "1" -- "0..*" Payment
+User "1" -- "0..*" LoyaltyTransaction
+Order "0..1" -- "0..*" LoyaltyTransaction
+Order ..> Coupon : lưu code khi áp dụng
+Product "1" -- "0..*" ProductRecipe
+Topping "1" -- "0..*" ToppingRecipe
+Ingredient "1" -- "0..*" ProductRecipe
+Ingredient "1" -- "0..*" ToppingRecipe
+Ingredient "1" -- "0..*" InventoryMovement
+Order "0..1" -- "0..*" InventoryMovement
 
-class Payment {
-  + id: UUID
-  + amount: Decimal
-  + paymentMethod: PaymentMethod
-  + status: PaymentStatus
-  + idempotencyKey: UUID {unique}
-  + gatewayTransactionId: String
-  + failureReason: String
-  + createdAt: DateTime
-  + paidAt: DateTime
-  --
-  + markSuccess(transactionId): void
-  + markFailed(reason): void
-}
-
-class Promotion {
-  + id: UUID
-  + code: String {unique}
-  + type: PromotionType
-  + discountValue: Decimal
-  + minOrderAmount: Decimal
-  + startAt: DateTime
-  + endAt: DateTime
-  + usageLimit: Integer
-  + usedCount: Integer
-  + isActive: Boolean
-  --
-  + isValid(orderAmount): Boolean
-  + calculateDiscount(orderAmount): Decimal
-}
-
-' ===================== ENUMS =====================
-enum UserRole {
-  CUSTOMER
-  ADMIN
-}
-
-enum OrderStatus {
-  PENDING
-  PAID
-  PAYMENT_FAILED
-  PREPARING
-  READY
-  COMPLETED
-  CANCELLED
-}
-
-enum PaymentMethod {
-  VNPAY
-}
-
-enum PaymentStatus {
-  PENDING
-  SUCCESS
-  FAILED
-}
-
-enum PromotionType {
-  PERCENTAGE
-  FIXED_AMOUNT
-}
-
-enum LoyaltyTransactionType {
-  EARN
-  REDEEM
-}
-
-' ===================== RELATIONSHIPS =====================
-User "1" -- "0..*" Order : places
-User "1" -- "0..*" LoyaltyTransaction : owns
-Product "1" -- "0..*" OrderItem : product
-Order "1" *-- "1..*" OrderItem : contains
-Order "1" *-- "0..*" Payment : payment attempts
-Order "0..1" -- "0..*" LoyaltyTransaction : related order
-Promotion "0..1" -- "0..*" Order : applied to
-
-' ===================== ENUM DEPENDENCIES =====================
-User ..> UserRole
-Order ..> OrderStatus
-Payment ..> PaymentMethod
-Payment ..> PaymentStatus
-Promotion ..> PromotionType
-LoyaltyTransaction ..> LoyaltyTransactionType
-
+note bottom of Order
+  OrderItem là snapshot trong Order.items (JSONB).
+  Trạng thái được lưu dưới dạng String.
+  couponCode là giá trị lưu trên đơn.
+end note
+note bottom of Payment
+  Khóa duy nhất (userId, idempotencyKey).
+  Mỗi đơn tối đa một Payment SUCCESS.
+end note
 @enduml

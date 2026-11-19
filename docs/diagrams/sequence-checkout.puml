@@ -1,98 +1,89 @@
 @startuml
-' BrewLite Task 2.2: checkout with VNPay Sandbox
-' Sandbox-only integration; production payment is out of scope.
-skinparam monochrome true
+title BrewLite — Trình tự checkout
 skinparam shadowing false
-skinparam sequenceMessageAlign center
-skinparam responseMessageBelowArrow false
-skinparam maxMessageSize 66
-hide footbox
+skinparam maxMessageSize 80
 autonumber
 
-actor "Khách hàng" as Customer
-participant "Next.js UI" as UI
+actor "Chủ đơn" as Customer
+participant "Trình duyệt" as Browser
+participant "Next.js UI / rewrite" as Next
 participant "NestJS API" as API
 database "PostgreSQL" as DB
-participant "VNPay Sandbox" as VNP
+participant "Payment Service mock" as Mock
+participant "VNPay Sandbox" as Vnpay
 
-== Tạo đơn ==
-Customer -> UI: Checkout giỏ hàng
-UI -> API: POST /orders (JWT, cart)
-API -> API: Xác thực JWT, validate và tính lại giá
-API -> DB: BEGIN; kiểm tra/giữ tồn kho nguyên tử
-alt Dữ liệu sai hoặc thiếu tồn kho
-  API -> DB: ROLLBACK
-  API --> UI: Lỗi; không tạo đơn
-  UI --> Customer: Hiển thị lỗi, giữ giỏ
-else Hợp lệ
-  API -> DB: Ghi Order PENDING, OrderItems; COMMIT
-  API --> UI: orderId, orderCode, totalAmount
-end
-
-== Khởi tạo thanh toán ==
-Customer -> UI: Chọn VNPay và xác nhận
-UI -> API: POST /payments (orderId, VNPAY, Idempotency-Key)
-API -> DB: Đọc đơn và kiểm tra chủ sở hữu/trạng thái
-API -> DB: Lưu Payment attempt + mã tham chiếu duy nhất
-API -> API: Ký request bằng secret phía server
-API --> UI: paymentUrl
-UI -> Customer: Chuyển hướng sang VNPay
-Customer -> VNP: Chọn nguồn tiền, xác nhận giao dịch sandbox
-
-== Thông báo và xác minh ==
-VNP -> API: IPN (mã tham chiếu, amount, response, chữ ký)
-API -> API: Xác minh chữ ký và đối chiếu đơn/amount/reference
-alt IPN không hợp lệ hoặc dữ liệu không khớp
-  API --> VNP: Từ chối/không cập nhật đơn
-else Giao dịch đã xử lý (duplicate IPN)
-  API -> DB: Đọc kết quả Payment đã lưu
-  API --> VNP: Trả phản hồi idempotent
-else VNPay xác nhận thành công
-  API -> DB: BEGIN; khóa đơn/payment; Payment SUCCESS, Order PAID; COMMIT
-  API --> VNP: Acknowledge
-else VNPay xác nhận thất bại
-  API -> DB: BEGIN; Payment FAILED, Order PAYMENT_FAILED
-  API -> DB: Hoàn tồn kho/điểm đúng một lần; COMMIT
-  API --> VNP: Acknowledge
-end
-
-== Quay về và hiển thị trạng thái ==
-VNP --> Customer: Return URL (chỉ điều hướng, không phải xác nhận)
-Customer -> UI: Mở trang kết quả
-UI -> API: GET /orders/{id} hoặc GET /payments/{ref}
-API -> DB: Đọc trạng thái đã xác minh
-DB --> API: PENDING / PAID / PAYMENT_FAILED
-API --> UI: Trạng thái authoritative
-alt PAID
-  UI -> UI: Xóa giỏ hàng
-  UI --> Customer: Hiển thị xác nhận PAID
-else PAYMENT_FAILED
-  UI -> UI: Giữ giỏ hàng
-  UI --> Customer: Thử lại cùng đơn hoặc quay lại giỏ
-else Chưa có kết quả cuối
-  UI --> Customer: Đang xác minh; chưa kết luận thất bại
-end
-
-== Thử lại sau thất bại đã xác nhận ==
-opt Khách chọn thử lại trên cùng đơn
-  Customer -> UI: Thử lại thanh toán
-  UI -> API: POST /orders/{id}/retry (JWT)
-  API -> DB: BEGIN; kiểm tra/giữ tồn kho lại
-  alt Đủ tồn kho
-    API -> DB: PAYMENT_FAILED -> PENDING; COMMIT
-    API --> UI: Cho phép payment attempt mới
-    UI -> API: POST /payments (cùng orderId, Idempotency-Key mới)
-    API -> VNP: Tạo giao dịch VNPay mới, ref mới
-  else Không đủ tồn kho
-    API -> DB: ROLLBACK
-    API --> UI: Yêu cầu cập nhật giỏ hàng
+Customer -> Browser : Xác nhận checkout
+Browser -> Next : POST /api/backend/orders + Bearer
+Next -> API : POST /orders
+API -> API : Xác minh JWT và kiểm tra DTO
+API -> DB : BEGIN; tính giá, kiểm tra và giữ tồn
+alt Hợp lệ và đủ tồn
+  API -> DB : Ghi PENDING, snapshot, lịch sử; COMMIT
+  API --> Next : 201 Order
+  Next --> Browser : 201 Order
+else Hết hàng hoặc lựa chọn không khả dụng
+  API -> DB : ROLLBACK
+  API --> Next : Lỗi nghiệp vụ
+  Next --> Browser : Hiện lỗi và giữ giỏ
+  break Kết thúc lần checkout
+    Browser --> Customer : Sửa giỏ rồi thử lại
   end
 end
 
-note over UI,API
-  Mất phản hồi trong cùng attempt: gửi lại với cùng Idempotency-Key
-  và đối soát trạng thái; không tạo giao dịch mới.
-  Attempt mới sau thất bại đã xác nhận: cùng orderId,
-  khóa idempotency và mã tham chiếu mới.
-end note
+Browser -> Next : POST /api/backend/payments\nBearer, Idempotency-Key, orderId, paymentMethod
+Next -> API : POST /payments
+API -> API : Xác minh JWT, DTO và UUID v4 của key
+API -> DB : Khóa người dùng, tra khóa, kiểm tra và khóa đơn
+alt Đã có cùng key và payload
+  API --> Next : Trả kết quả đã lưu
+  Next --> Browser : Kết quả hoặc checkoutUrl còn hạn
+else Key trùng nhưng payload khác
+  API --> Next : 409 IDEMPOTENCY_CONFLICT
+  Next --> Browser : Hiện lỗi
+else Lần thử mới ở chế độ mock
+  API -> Mock : charge theo số tiền đã lưu và mockOutcome
+  Mock --> API : SUCCESS hoặc FAILED
+  alt Thành công
+    API -> DB : Ghi SUCCESS, PAID và cộng điểm
+  else Thất bại
+    API -> DB : Ghi FAILED, PAYMENT_FAILED và hoàn tồn
+  end
+  API --> Next : Kết quả và cartAction
+  Next --> Browser : Kết quả
+else VNPay
+  API -> DB : Ghi Payment PENDING và mã lần thử
+  API --> Next : checkoutUrl có chữ ký, hạn 15 phút
+  Next --> Browser : checkoutUrl
+  Browser -> Vnpay : Mở cổng Sandbox
+  par Return qua trình duyệt
+    Vnpay --> Browser : Chuyển đến Return URL
+    Browser -> API : GET /payments/vnpay/return
+    API -> DB : Tra lần thử và đối chiếu số tiền
+    API --> Browser : 302, trang kết quả hoặc danh sách đơn
+  else IPN trực tiếp
+    Vnpay -> API : GET /payments/vnpay/ipn
+    API -> API : Xác minh chữ ký và mã terminal
+    API -> DB : Khoá dòng, đối chiếu tham chiếu và số tiền
+    alt IPN xác nhận thành công
+      API -> DB : Ghi SUCCESS, PAID và cộng điểm
+    else IPN xác nhận thất bại
+      API -> DB : Ghi FAILED, PAYMENT_FAILED và hoàn tồn
+    else IPN không hợp lệ hoặc đã xác nhận
+      API -> API : Trả mã phù hợp và giữ dữ liệu
+    end
+    API --> Vnpay : HTTP 200 với RspCode và Message
+  end
+end
+
+opt Trang kết quả được mở
+  Browser -> Next : GET /api/backend/orders/:id + Bearer
+  Next -> API : GET /orders/:id
+  API -> DB : Đọc đơn theo UUID và chủ sở hữu
+  API --> Next : Trạng thái, snapshot và lịch sử
+  Next --> Browser : Chi tiết đơn
+  note over Browser
+    Khi PENDING, hỏi lại khoảng 2 giây một lần
+    trong tối đa 30 giây. Xóa giỏ khi đơn đã trả tiền.
+  end note
+end
 @enduml

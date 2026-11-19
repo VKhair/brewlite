@@ -1,25 +1,11 @@
-# ADR-0002: JWT cho xác thực API
+# ADR-0002 — Xác thực API bằng JWT
 
-- **Trạng thái:** Accepted
-- **Ngày:** 2026-11-12
+**Quyết định ban đầu ngày 12/11/2026. Trạng thái hiện tại đã triển khai.**
 
-## Bối cảnh
+API NestJS ký access token bằng HS256, với sub là UUID người dùng và issuer, audience, expiration được kiểm tra khi xác minh. JWT_SECRET cần tối thiểu 32 byte. Thời hạn mặc định là 1 ngày. Mật khẩu được băm bcrypt cost 12.
 
-SRS FR-06 yêu cầu đăng nhập và xác thực JWT. Tạo đơn cần JWT hợp lệ; API phải tự kiểm tra quyền sở hữu Order. Ứng dụng Web và API là hai container logic riêng.
+Web lưu phiên trong localStorage và gửi Authorization: Bearer khi gọi route được bảo vệ. JwtGuard tra người dùng và vai trò hiện tại trong DB. Đọc, hủy và thanh toán theo chủ đơn. STAFF hoặc ADMIN đổi tiến độ. Chỉ ADMIN truy cập API kho. Tạo đơn yêu cầu JWT của tài khoản đặt đơn.
 
-## Quyết định
+Đăng xuất xóa phiên cục bộ. Token đã cấp vẫn có hiệu lực trong thời hạn và bị từ chối nếu tài khoản không còn tồn tại. Phiên bản hiện tại dùng một access token cho mỗi lần xác thực, chưa có refresh token.
 
-API NestJS phát hành và xác minh JWT cho các endpoint cần đăng nhập. Guard/API layer kiểm tra token và chuyển danh tính đã xác minh vào application layer; authorization theo user/order luôn thực hiện ở server. Mật khẩu được lưu dạng hash theo yêu cầu SRS, không lưu plaintext.
-
-ADR này chốt cơ chế xác thực JWT ở mức kiến trúc; chưa chốt token transport/storage phía trình duyệt, refresh-token flow, key rotation hoặc role matrix. Các chi tiết đó phải được chốt trong API/auth design trước khi triển khai.
-
-## Phương án đã cân nhắc
-
-- **Session stateful:** dễ thu hồi phiên tập trung nhưng cần session store và chia sẻ trạng thái.
-- **JWT:** phù hợp API stateless và đã được yêu cầu trong SRS; cần quản lý secret, hạn dùng và quyền truy cập cẩn thận.
-
-## Hệ quả
-
-- `JWT_SECRET` là secret runtime; `.env.example` chỉ chứa placeholder.
-- Endpoint bảo vệ phải kiểm tra JWT, chủ sở hữu tài nguyên và quyền phù hợp.
-- Không xem việc JWT hợp lệ là đủ để cho phép truy cập mọi Order.
+Xem [dịch vụ xác thực và JwtGuard](../../../apps/api/src/auth.ts), [AdminGuard](../../../apps/api/src/admin.guard.ts) và [store web](../../../apps/web/src/lib/store.tsx).

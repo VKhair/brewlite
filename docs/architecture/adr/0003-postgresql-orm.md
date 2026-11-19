@@ -1,31 +1,9 @@
-# ADR-0003: ORM cho PostgreSQL
+# ADR-0003 — Prisma 7 trên PostgreSQL
 
-- **Trạng thái:** Proposed – cần nhóm duyệt trước khi thêm dependency
-- **Ngày:** 2026-11-12
+**Đề xuất ban đầu ngày 12/11/2026. Prisma hiện đã được triển khai trong API.**
 
-## Bối cảnh
+Prisma Client được sinh từ schema và sử dụng PostgreSQL qua adapter pg. Các service dùng Prisma transaction cho đơn, thanh toán, điểm và biến động kho. SQL trong migration bổ sung CHECK, khóa ngoại và chỉ mục, gồm chỉ mục duy nhất cho một lần thanh toán SUCCESS trên mỗi đơn. Truy vấn khóa dòng dùng raw query dạng tagged template ở nơi cần đồng bộ.
 
-PostgreSQL đã được nêu trong README, `.env.example`, domain model và sequence diagram; tuy nhiên API, schema và ORM chưa được khởi tạo. Nhóm cần migrations có thể review và lặp lại ở local/staging/production, đồng thời API được viết bằng NestJS/TypeScript.
+Prisma CLI dùng DATABASE_URL và thư mục prisma/migrations. Script db:setup chạy migration rồi seed. Script nhận diện một số schema UUID cũ để ghi nhận baseline nếu phù hợp. Dữ liệu mẫu được thêm theo khóa ổn định. Seed cần Prisma Client trong bản build API. Bộ kiểm thử tích hợp dùng PostgreSQL thật với schema riêng.
 
-## Đề xuất
-
-Dùng **Prisma ORM** cho truy vấn dữ liệu và quản lý schema/migrations PostgreSQL. Giữ database transaction ở application/repository boundary; dùng constraint/index PostgreSQL cho unique key, foreign key và idempotency. Với thao tác concurrency nhạy cảm như giữ tồn kho, cho phép migration/query SQL tường minh khi cần và yêu cầu review.
-
-Prisma được NestJS hướng dẫn tích hợp qua provider/service; Prisma hỗ trợ PostgreSQL và lưu lịch sử migrations có thể review. Chốt phiên bản stable tương thích với Node/NestJS khi ứng dụng được khởi tạo; không ghi cứng lệnh CLI theo major chưa được cài trong repo.
-
-## Phương án đã cân nhắc
-
-- **TypeORM:** tích hợp quen thuộc với NestJS và decorators; mapping entity/migration rõ, nhưng lựa chọn chưa được phản ánh trong repo.
-- **Prisma (đề xuất):** schema/contract và kiểu TypeScript có thể review, migrations được version-control; bổ sung toolchain riêng cần ghim version.
-- **SQL/query builder trực tiếp:** kiểm soát query tốt nhưng tăng lượng mapping và boilerplate cho domain model.
-
-## Hệ quả
-
-- Đây chưa phải quyết định được nhóm chấp nhận; không tạo schema/migrations hay dependency trong ADR-only change.
-- Nếu được duyệt, schema ORM phải khớp class diagram và SRS; migrations phải được review và chạy qua release pipeline.
-- Cần benchmark/kiểm thử transaction tồn kho và unique constraint idempotency bằng PostgreSQL thật trước nghiệm thu.
-
-## Tài liệu tham khảo
-
-- [NestJS Prisma recipe](https://docs.nestjs.com/recipes/prisma)
-- [Prisma ORM documentation](https://www.prisma.io/docs/orm)
+Xem [schema hiện hành](../../../apps/api/prisma/schema.prisma), [Prisma config](../../../apps/api/prisma.config.ts), [PrismaService](../../../apps/api/src/prisma/prisma.service.ts) và [script migration](../../../apps/api/scripts/migrate.cjs).

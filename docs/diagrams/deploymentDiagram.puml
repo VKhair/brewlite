@@ -1,62 +1,50 @@
-@startuml BrewLite_Lightsail_Deployment
-title BrewLite - AWS Lightsail Deployment (Task 3.2)
-
-left to right direction
-skinparam componentStyle rectangle
+@startuml
+title BrewLite — Triển khai AWS Lightsail
+!pragma layout smetana
 skinparam shadowing false
+skinparam componentStyle rectangle
 
-actor "Customer" as customer
-cloud "Internet" as internet {
-  node "VNPay Sandbox" as vnp
-  artifact "GitHub Repository" as repo
-  artifact "GitHub Actions\n(CI/CD - planned)" as actions
-}
+actor "Người dùng" as Customer
+artifact "Trình duyệt" as Browser
+cloud "VNPay Sandbox" as Gateway
+node "Local\nCompose web/API/PostgreSQL" as Local
+node "CI — GitHub Actions\nInstall, generate, lint, test, build" as CI
+artifact "Container registry\nHạng mục CD theo đề bài nếu cần" as Registry
 
-node "AWS Account" as aws {
-  node "AWS Lightsail\nRegion TBD" as lightsail {
-    node "Container Service: brewlite-web\nPublic HTTPS endpoint" as webService {
-      artifact "Next.js Web container\nport 3000" as web
-    }
-
-    node "Container Service: brewlite-api\nPublic HTTPS endpoint\n(Web API + VNPay IPN)" as apiService {
-      artifact "NestJS API container\nport 3001" as api
-    }
-
-    database "Managed PostgreSQL\nPrivate mode · port 5432" as db
-
-    artifact "brewlite-web image store\ncommit SHA tag" as webImages
-    artifact "brewlite-api image store\ncommit SHA tag" as apiImages
+node "AWS Lightsail — ap-southeast-2\nUbuntu 24.04 LTS" as Host {
+  artifact "Images hiện có\nbrewlite-web và brewlite-api" as Images
+  artifact "Cấu hình máy chủ\nEnv và secret runtime" as Env
+  node "Docker Compose — brewlite-server" as Compose {
+    component "caddy\nHTTP :80 và HTTPS :443" as Caddy
+    component "web\nNext.js standalone\nweb:3000" as Web
+    component "api\nNestJS + Prisma\napi:3001" as API
+    database "postgres\nPostgreSQL 16\npostgres:5432" as DB
+    storage "postgres_data" as Data
+    storage "caddy_data và caddy_config" as CaddyData
   }
 }
 
-customer --> webService : HTTPS
-customer --> apiService : HTTPS API calls\nNEXT_PUBLIC_API_URL
-apiService --> customer : Payment URL response
-customer --> vnp : Redirect using payment URL
-vnp --> apiService : IPN · HTTPS
-vnp ..> webService : Return URL via browser
-web --> apiService : Server-side API calls\nif used
-api --> db : Private network\nDATABASE_URL
+Customer --> Browser
+Browser --> Caddy : HTTPS brewlite.vkhair.dev
+Browser ..> Gateway : Checkout redirect
+Gateway --> Caddy : IPN qua HTTPS
+Gateway ..> Browser : Trở về Return URL
+Caddy --> Web : Trang web và /api/backend/*
+Caddy --> API : /payments/vnpay/return\nvà /payments/vnpay/ipn
+Web --> API : Rewrite /api/backend/*
+API --> DB : postgres:5432
+DB -- Data
+Caddy -- CaddyData
+Env ..> API : Biến môi trường
+Images ..> Compose : Image tag đã cài
+Local ..> CI : Push hoặc PR
+CI ..> Registry : Pipeline CD cần bổ sung
+Registry ..> Images : Luồng release dự kiến nếu dùng registry
 
-repo ..> actions : Workflow trigger
-actions ..> webImages : Build/push Web image\nSHA tag
-actions ..> apiImages : Build/push API image\nSHA tag
-webImages ..> webService : Create deployment
-apiImages ..> apiService : Create deployment
-
-note bottom of lightsail
-All Lightsail resources must use the same Region.
-Topology is a target; AWS resources are not provisioned yet.
+note bottom of Compose
+  Web, API và DB dùng mạng nội bộ Compose.
+  API chạy migration và seed trước khi start.
+  Healthcheck: PostgreSQL → API → web.
+  Log vận hành: docker compose logs.
 end note
-
-note bottom of apiService
-CORS allowlist for Web origin; JWT and request validation.
-Verify VNPay IPN signature. Return URL does not confirm payment.
-end note
-
-note bottom of db
-Keep database private. GitHub-hosted runner cannot connect directly;
-run migrations from a Lightsail-side job/runner.
-end note
-
 @enduml

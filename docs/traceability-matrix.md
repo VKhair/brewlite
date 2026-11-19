@@ -1,48 +1,66 @@
-# MA TRẬN TRUY VẾT YÊU CẦU (REQUIREMENTS TRACEABILITY MATRIX)
+# Ma trận truy vết BrewLite
 
-> **Dự án:** BrewLite - Nền tảng đặt đồ uống trực tuyến Mobile-First (Assignment 2)  
-> **Phạm vi:** Liên kết Yêu cầu nghiệp vụ (SRS) với Thiết kế mô hình, Mã nguồn triển khai và Ca kiểm thử
+Mã FR/NFR khớp [SRS](requirements/srs.md). Bảng ghi nguồn triển khai và ca tự động thực sự có trong repository. Những hành vi chỉ đối chiếu từ mã hoặc cần kiểm tra thủ công được ghi rõ.
 
----
+Trong cột Thiết kế, FSM là [sơ đồ trạng thái đơn](architecture/architecture.md#5-luồng-đặt-món-và-thanh-toán). Kiến trúc web/API và các ADR mô tả ranh giới dịch vụ. Các mã sơ đồ còn lại liên kết ở cuối trang. Issue và chủ module dùng [Product Backlog](backlog.md).
 
-## 1. Bảng truy vết Yêu cầu Chức năng (Functional Requirements - FR)
+## Bài kiểm thử hiện có
 
-| Mã yêu cầu | Use-case/User Story | Thiết kế/Sơ đồ | Code/API | Test |
-|---|---|---|---|---|
-| **FR-01** | US-01 / UC-01: Xem danh mục đồ uống | Activity-01, Class-01, UseCase-Overall | `GET /products`<br>`apps/web/src/app/menu` | `API-T01: test_get_products`<br>`UI-T01: test_menu_render` |
-| **FR-02** | US-02 / UC-03: Xem thông tin chi tiết đồ uống | Activity-01, Class-01, UseCase-Overall | `GET /products/:id`<br>`apps/web/src/app/products/[id]` | `API-T02: test_get_product_detail`<br>`UI-T02: test_detail_modal` |
-| **FR-03** | US-03 / UC-04: Tùy biến Size và Topping | Activity-01, Class-01 (Product, OrderItem), UseCase-Overall | `apps/web/src/components/ProductOptions` | `UNIT-T01: test_calc_item_price` |
-| **FR-04** | US-04 / UC-06: Quản lý giỏ hàng & tính tổng tiền | Activity-01, Class-01, UseCase-Overall | `apps/web/src/hooks/useCart`<br>`apps/web/src/app/cart` | `UNIT-T02: test_cart_total_calc`<br>`UI-T03: test_cart_item_update` |
-| **FR-05** | US-05 / UC-08: Đăng ký tài khoản người dùng | Class-01 (User), UseCase-Overall | `POST /auth/register`<br>`apps/web/src/app/register` | `API-T03: test_auth_register`<br>`INT-T01: test_register_duplicate` |
-| **FR-06** | US-06 / UC-09: Đăng nhập và xác thực JWT | Sequence-01, Class-01 (User), UseCase-Overall | `POST /auth/login`<br>`apps/web/src/app/login` | `API-T04: test_auth_jwt_login`<br>`UNIT-T03: test_jwt_guard` |
-| **FR-07** | US-07 / UC-11: Tạo đơn hàng (Checkout) & kiểm soát tồn kho | Activity-01, Sequence-01, Class-01 (Order, OrderItem), UseCase-Overall | `POST /orders`<br>`apps/web/src/app/checkout` | `INT-T02: test_create_order_tx`<br>`E2E-T01: test_checkout_flow` |
-| **FR-08** | US-08 / UC-13: Thực hiện thanh toán mô phỏng thành công | Activity-01, Sequence-01, Class-01 (Payment, Order), UseCase-Overall | `POST /payments`<br>`apps/api/src/modules/payments` | `INT-T03: test_mock_payment_success`<br>`E2E-T01: test_checkout_flow` |
-| **FR-09** | US-09 / UC-17: Xử lý thanh toán thất bại & bảo toàn giỏ hàng | Activity-01, Sequence-01, UseCase-Overall | `POST /payments`<br>`apps/web/src/app/payment/failed` | `INT-T04: test_mock_payment_failed`<br>`UI-T04: test_cart_preserved_on_fail` |
-| **FR-10** | US-10 / UC-18: Xem xác nhận đơn hàng và mã tra cứu | Activity-01, Sequence-01, Class-01 (Order), UseCase-Overall | `apps/web/src/app/orders/success` | `UI-T05: test_order_confirmation` |
-| **FR-11** | US-11 / UC-21: Xem danh sách lịch sử đơn hàng cá nhân | Class-01 (Order, User), UseCase-Overall | `GET /orders/me`<br>`apps/web/src/app/orders` | `API-T05: test_get_my_orders`<br>`UI-T06: test_order_history_list` |
-| **FR-12** | US-12 / UC-19: Theo dõi trạng thái vòng đời đơn hàng (FSM) | Sequence-01, Class-01 (Order), UseCase-Overall | `GET /orders/:id`<br>`apps/web/src/app/orders/[id]` | `API-T06: test_order_lifecycle_fsm`<br>`UI-T07: test_order_status_stepper` |
-| **FR-13** | US-13 / UC-25: Kiểm tra sức khỏe hệ thống (Health Check) | Deployment-01, UseCase-Overall | `GET /health` | `API-T07: test_health_endpoint`<br>`SMOKE-T01: test_prod_health` |
-| **FR-14** | US-14 / UC-02: Tìm kiếm và lọc sản phẩm theo danh mục | Activity-01, Class-01, UseCase-Overall | `GET /products?search=&category=`<br>`apps/web/src/app/menu` | `UI-T08: test_search_and_filter` |
-| **FR-15** | US-15 / UC-20: Hủy đơn hàng ở trạng thái chờ thanh toán (PENDING) | Class-01 (Order), UseCase-Overall | `PATCH /orders/:id/cancel` | `API-T08: test_cancel_pending_order` |
-| **FR-16** | US-16 / UC-06: Lưu giỏ hàng tạm thời vào Local Storage | Class-01, UseCase-Overall | `apps/web/src/utils/cartStorage` | `UNIT-T04: test_local_storage_sync` |
-| **FR-17** | US-17 / UC-15: Áp dụng mã khuyến mãi giảm giá (Promotion) | Class-01 (Promotion, Order), UseCase-Overall | `POST /promotions/validate` | `UNIT-T05: test_promotion_discount` |
-| **FR-18** | US-18 / UC-16: Tích lũy và sử dụng điểm thưởng thành viên | Class-01 (LoyaltyTransaction, User), UseCase-Overall | `apps/api/src/modules/loyalty` | `UNIT-T06: test_loyalty_accrual` |
+| Ký hiệu | Bài kiểm thử |
+| --- | --- |
+| INT-01 | Health, catalog, register/login and JWT authorization use Prisma. Đăng ký nằm ở phần chuẩn bị chung của suite. |
+| INT-02 | Checkout, failed payment, retry and duplicate idempotency preserve stock and order state. |
+| INT-03 | Coupon, points ledger and ingredient recipes are persisted transactionally. |
+| INT-04 | VNPay signs checkout and settles only via a valid IPN, once per attempt. |
+| UNIT-01 | AppController, gồm phản hồi gốc và readiness DB. |
+| UNIT-02 | InventoryService, gồm gom định lượng và món chưa có công thức. |
+| E2E-01 | GET / qua Supertest với PrismaService mock. |
 
----
+Bốn bài INT ở [prisma.integration.test.cjs](../apps/api/test/prisma.integration.test.cjs). Xem thêm [unit controller](../apps/api/src/app.controller.spec.ts), [unit kho](../apps/api/src/inventory/inventory.service.spec.ts) và [API e2e](../apps/api/test/app.e2e-spec.ts).
 
-## 2. Bảng truy vết Yêu cầu Phi Chức Năng (Non-Functional Requirements - NFR)
+E2E trình duyệt menu → xác nhận thuộc S2-M02 trong backlog. Khi có kết quả chạy, gắn minh chứng vào FR-01, FR-03–08 và FR-10 theo những bước mà test thực sự thực hiện.
 
-| Mã yêu cầu | Use-case/User Story | Thiết kế/Sơ đồ | Code/API | Test |
-|---|---|---|---|---|
-| **NFR-01** | Hiệu năng đọc danh mục (p95 <= 300ms) | Architecture-01, Deployment-01 | `GET /products` (NestJS Cache/Query) | `PERF-T01: k6_read_products_p95` |
-| **NFR-02** | Hiệu năng ghi tạo đơn & thanh toán (p95 <= 800ms) | Architecture-01, Deployment-01 | `POST /orders`, `POST /payments/process` | `PERF-T02: k6_checkout_write_p95` |
-| **NFR-03** | Core Web Vitals (FCP <= 1.5s, LCP <= 2.5s, JS <= 250KB) | Architecture-01 (Next.js SSR/PWA) | `apps/web/next.config.js` | `PERF-T03: lighthouse_audit_ci` |
-| **NFR-04** | Xác thực phân quyền người dùng qua JWT | Architecture-01, Sequence-01 | `apps/api/src/modules/auth/jwt.strategy` | `SEC-T01: test_jwt_auth_guard` |
-| **NFR-05** | Băm mật khẩu người dùng với bcrypt salt >= 10 | Class-01 (User) | `apps/api/src/modules/users/user.service` | `SEC-T02: test_bcrypt_hashing` |
-| **NFR-06** | Ngăn ngừa SQL Injection và XSS | Architecture-01 | `NestJS ValidationPipe (whitelist: true)` | `SEC-T03: test_injection_prevention` |
-| **NFR-07** | Mã hóa HTTPS và Quản lý biến môi trường .env | Deployment-01, ADR-002 | `.env.example`, Docker production config | `SEC-T04: gitleaks_secret_scan` |
-| **NFR-08** | Giao dịch ACID và Idempotency key chống trừ tiền lặp | Sequence-01 (Transaction & Idempotency) | `apps/api/src/common/idempotency.guard` | `REL-T01: test_duplicate_payment_key` |
-| **NFR-09** | Khả năng bảo toàn giỏ hàng khi thanh toán thất bại | Activity-01, Sequence-01 | `apps/web/src/hooks/useCart` | `REL-T02: test_cart_state_rollback` |
-| **NFR-10** | Mobile-First Responsive và hỗ trợ PWA | Architecture-01 (Web PWA) | `apps/web/public/manifest.json` | `USA-T01: test_pwa_manifest_valid` |
-| **NFR-11** | Đầy đủ 3 trạng thái giao diện: Loading, Empty, Error | Activity-01 | `apps/web/src/components/feedback/*` | `USA-T02: test_ui_states_render` |
-| **NFR-12** | Đóng gói Docker, Automated CI PR Gate và Rollback | Architecture-01, Deployment-01 | `docker-compose.yml`, `.github/workflows/ci.yml` | `OPS-T01: ci_pipeline_automated_pass`<br>`OPS-T02: test_rollback_drill` |
+## Yêu cầu chức năng
+
+| Mã | Use case hoặc User Story | Thiết kế | Code/API | Test và minh chứng |
+| --- | --- | --- | --- | --- |
+| FR-01 | Khách xem thực đơn | UC tổng, Activity | [ProductsController](../apps/api/src/products.ts), [MenuProducts](../apps/web/src/components/ui.tsx) | INT-01 kiểm tra API danh sách. |
+| FR-02 | Khách xem chi tiết món | UC tổng, Class | [GET /products/:id](../apps/api/src/products.ts), [trang sản phẩm](../apps/web/src/app/product) | INT-01 kiểm tra danh sách size. |
+| FR-03 | Khách chọn size/topping | UC tổng, Activity, Class | [Trang sản phẩm](../apps/web/src/app/product), [snapshot](../apps/api/src/orders.ts) | INT-02 kiểm tra đơn giá size mặc định. UI và tổ hợp topping cần kiểm tra riêng. |
+| FR-04 | Khách thêm và sửa giỏ | UC checkout, Activity | [Cart](../apps/web/src/app/cart), [store](../apps/web/src/lib/store.tsx) | Kiểm tra thủ công. |
+| FR-05 | Khách đăng ký | UC tổng, Class | [Đăng ký API](../apps/api/src/auth.ts), [form đăng ký](../apps/web/src/app/register) | INT-01 dùng tài khoản đăng ký trong setup. |
+| FR-06 | Khách đăng nhập để đặt | UC checkout, Activity, Sequence | [Auth và JWT](../apps/api/src/auth.ts), [login](../apps/web/src/app/login) | INT-01 kiểm tra login và request thiếu JWT. |
+| FR-07 | Khách tạo đơn từ giỏ | UC checkout, Activity, Sequence, Class | [Tạo đơn](../apps/api/src/orders.ts), [trừ nguyên liệu](../apps/api/src/inventory/inventory.service.ts) | INT-02, INT-03 và UNIT-02. |
+| FR-08 | Khách thanh toán | UC checkout, Sequence, Class | [PaymentsService](../apps/api/src/payments.ts), [VNPay](../apps/api/src/vnpay.ts) | INT-02 cho mock, INT-04 cho URL và callback Sandbox mô phỏng. |
+| FR-09 | Khách thử lại khi thanh toán lỗi | UC checkout, Activity, Sequence | [Thanh toán](../apps/api/src/payments.ts), [checkout](../apps/web/src/app/checkout) | INT-02 và INT-04 kiểm tra trạng thái và retry. Giỏ web cần kiểm tra thủ công. |
+| FR-10 | Khách đọc kết quả và mã đơn | UC checkout, Sequence | [Trang kết quả](../apps/web/src/app/success) | INT-04 kiểm tra URL redirect và trạng thái đơn. Phần hiển thị cần kiểm tra thủ công. |
+| FR-11 | Khách xem lịch sử | UC tổng, Class | [GET /orders/me](../apps/api/src/orders.ts), [trang lịch sử](../apps/web/src/app/orders) | INT-01 kiểm tra truy cập. [Smoke script](../apps/api/scripts/smoke-commerce.cjs) kiểm tra đơn mới có trong danh sách. |
+| FR-12 | Khách theo dõi, nhân viên cập nhật | UC tổng, FSM | [Chi tiết và cập nhật](../apps/api/src/orders.ts), [FSM](../apps/api/src/order-state.ts) | INT-02 và INT-04 kiểm tra các trạng thái thanh toán. Chuyển pha chế cần kiểm tra riêng. |
+| FR-13 | Vận hành kiểm tra hệ thống | Deployment | [GET /health](../apps/api/src/app.controller.ts) | UNIT-01 và INT-01. |
+| FR-14 | Khách tìm và lọc thức uống | UC tổng | [Tìm và lọc menu](../apps/web/src/components/ui.tsx) | Kiểm tra thủ công. |
+| FR-15 | Khách hủy đơn chưa thanh toán | UC checkout, FSM | [Hủy đơn](../apps/api/src/orders.ts) | INT-04 kiểm tra từ chối khi VNPay còn PENDING. Hủy thành công cần kiểm tra riêng. |
+| FR-16 | Khách mở lại giỏ trên thiết bị | UC tổng, kiến trúc web | [Store và localStorage](../apps/web/src/lib/store.tsx) | Kiểm tra thủ công. |
+| FR-17 | Khách áp coupon qua API | UC tổng, Class | [CouponsService](../apps/api/src/coupons/coupons.service.ts), [POST /orders](../apps/api/src/orders.ts) | INT-03 kiểm tra mức giảm ghi vào đơn. |
+| FR-18 | Khách tích và đổi điểm qua API | UC tổng, Class | [Sổ điểm](../apps/api/src/orders.ts), [schema](../apps/api/prisma/schema.prisma) | INT-03 kiểm tra đổi điểm, INT-04 kiểm tra chỉ cộng một lần. Hoàn điểm cần kiểm tra riêng. |
+| FR-19 | Quản trị viên cấu hình kho | UC tổng, Class | [Kho](../apps/api/src/inventory/inventory.controller.ts), [InventoryService](../apps/api/src/inventory/inventory.service.ts) | INT-03 kiểm tra cấm CUSTOMER, tạo nguyên liệu, công thức món và tiêu hao. UNIT-02 kiểm tra tổng định lượng. |
+
+## Yêu cầu phi chức năng
+
+| Mã | Use case hoặc User Story | Thiết kế | Code/API | Test và minh chứng |
+| --- | --- | --- | --- | --- |
+| NFR-01 | Khách tải menu nhanh | Kiến trúc API | [Đọc danh mục](../apps/api/src/products.ts) | INT-01 kiểm tra chức năng. Chưa có benchmark. |
+| NFR-02 | Khách nhận phản hồi checkout kịp thời | Sequence | [Tạo đơn](../apps/api/src/orders.ts), [thanh toán](../apps/api/src/payments.ts) | INT-02 và INT-04 kiểm tra chức năng. Chưa có benchmark. |
+| NFR-03 | Khách tải web trên di động | Kiến trúc web | [Next config](../apps/web/next.config.ts), [CSS](../apps/web/src/app/globals.css) | Chưa có phép đo Lighthouse trong repository. |
+| NFR-04 | Người dùng chỉ thao tác trong quyền | UC tổng, Sequence | [JwtGuard](../apps/api/src/auth.ts), [AdminGuard](../apps/api/src/admin.guard.ts) | INT-01 và INT-03. |
+| NFR-05 | Người dùng được bảo vệ mật khẩu | Class, ADR JWT | [bcrypt](../apps/api/src/auth.ts) | INT-01 đi qua đăng ký và login. Cost 12 đối chiếu từ mã. |
+| NFR-06 | API từ chối dữ liệu sai | Kiến trúc API, Sequence | [Parser](../apps/api/src/http.ts), [validation](../apps/api/src/validation.ts), [truy vấn](../apps/api/src/orders.ts) | Kiểm tra từ mã. Chưa có suite riêng cho parser và truy vấn. |
+| NFR-07 | Vận hành bảo vệ đường truyền và cấu hình | Deployment | [.env mẫu](../.env.example), [Compose local](../docker-compose.yml), [Lightsail](deployment.md#aws-lightsail) | HTTPS công khai trả `200`, HTTP chuyển hướng `308`. Docker chỉ publish cổng của Caddy trong stack. |
+| NFR-08 | Khách gửi lại mà giao dịch vẫn nhất quán | Sequence, Class | [Đơn](../apps/api/src/orders.ts), [thanh toán](../apps/api/src/payments.ts), [migration](../apps/api/prisma/migrations) | INT-02, INT-03, INT-04, gồm IPN lặp đồng thời trong INT-04. |
+| NFR-09 | Khách giữ giỏ sau lỗi và hệ thống hoàn tồn | Activity, Sequence, Class | [Kho](../apps/api/src/inventory/inventory.service.ts), [checkout](../apps/web/src/app/checkout) | INT-02 và INT-04 kiểm tra luồng lỗi. Chưa có test tự động cho giỏ hay retry với nguyên liệu. |
+| NFR-10 | Khách dùng web trên điện thoại | Kiến trúc web | [Manifest](../apps/web/src/app/manifest.ts), [CSS](../apps/web/src/app/globals.css) | Kiểm tra thủ công trên thiết bị. |
+| NFR-11 | Khách thấy trạng thái tải, rỗng và lỗi | Activity, kiến trúc web | [UI menu](../apps/web/src/components/ui.tsx), [checkout](../apps/web/src/app/checkout) | Kiểm tra thủ công. |
+| NFR-12 | Vận hành phát hành và kiểm tra hệ thống | Deployment | [Compose](../docker-compose.yml), [CI](../.github/workflows/ci.yml), [hướng dẫn chạy](deployment.md) | UNIT-01, INT-01 và E2E-01 kiểm tra API. Kiểm tra Lightsail xác nhận container đang chạy và health công khai trả `200`. Chưa có workflow CD hoặc thử rollback. |
+
+## Sơ đồ
+
+[Use case tổng](diagrams/use-case-overall.puml) bao quát khách hàng và vận hành. [Use case checkout](diagrams/BrewLite_DatVaThanhToan.puml), [activity](diagrams/Activity_Dia.puml) và [sequence](diagrams/sequence-checkout.puml) liên quan FR-07 đến FR-10 và FR-15. [Mô hình dữ liệu](diagrams/ClassDiagram_BrewLite.puml) và [triển khai Lightsail](diagrams/deploymentDiagram.puml) mô tả các yêu cầu dữ liệu và vận hành.

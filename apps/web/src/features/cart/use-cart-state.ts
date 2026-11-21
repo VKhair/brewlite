@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CartItem } from "./cart.types";
 
+const checkoutOrderKey = "brewlite-cart-order";
 const storageKey = "brewlite-cart";
 
 export function useCartState(ready: boolean) {
@@ -20,6 +21,7 @@ export function useCartState(ready: boolean) {
 
   // Thêm sản phẩm vào giỏ hàng
   const add = useCallback((item: CartItem) => {
+    localStorage.removeItem(checkoutOrderKey);
     setCart((old) => {
       const existing = old.find((row) => row.key === item.key);
 
@@ -40,6 +42,7 @@ export function useCartState(ready: boolean) {
 
   // Thay đổi số lượng
   const change = useCallback((key: string, quantity: number) => {
+    localStorage.removeItem(checkoutOrderKey);
     setCart((old) =>
       old.map((row) =>
         row.key === key
@@ -54,11 +57,19 @@ export function useCartState(ready: boolean) {
 
   // Xóa một sản phẩm
   const remove = useCallback((key: string) => {
+    localStorage.removeItem(checkoutOrderKey);
     setCart((old) => old.filter((row) => row.key !== key));
   }, []);
 
   // Xóa toàn bộ giỏ hàng
-  const clear = useCallback(() => {
+  const markCheckout = useCallback((orderId: string) => {
+    localStorage.setItem(checkoutOrderKey, orderId);
+  }, []);
+  const currentCheckout = useCallback(() => localStorage.getItem(checkoutOrderKey), []);
+  const clearPaidCart = useCallback((orderId: string) => {
+    if (localStorage.getItem(checkoutOrderKey) !== orderId) return;
+    localStorage.removeItem(checkoutOrderKey);
+    localStorage.removeItem(storageKey);
     setCart([]);
   }, []);
 
@@ -69,5 +80,5 @@ export function useCartState(ready: boolean) {
     0,
   );
 
-  return { cart, count, total, add, change, remove, clear, restoreCart };
+  return { cart, count, total, add, change, remove, markCheckout, currentCheckout, clearPaidCart, restoreCart };
 }

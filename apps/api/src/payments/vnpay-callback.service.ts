@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
 import type { VnpayProvider } from './providers/vnpay.provider';
 
@@ -66,6 +66,18 @@ export class VnpayCallbackService {
       );
       const payment = await tx.payment.findUniqueOrThrow({ where });
       if (!this.matchesAmount(callback.amount, payment.amount)) return '04';
+      if (order.status === 'CANCELLED' && payment.status === 'FAILED' &&
+          callback.responseCode === '00' && callback.status === '00') {
+        // The bank may confirm a charge after the customer cancelled an expired link.
+        const response = payment.response as Prisma.JsonObject;
+        if (!response.requiresRefundReview) {
+          await tx.payment.update({ where: { id: payment.id }, data: {
+            response: { ...response, requiresRefundReview: true },
+          } });
+          Logger.error('Late VNPay success requires refund review for payment ' + payment.id);
+        }
+        return '99';
+      }
       if (payment.status !== 'PENDING') return '02';
       if (
         order.status !== 'PENDING' ||

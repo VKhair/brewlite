@@ -17,8 +17,12 @@ auth:
 scripts:
   - type: afterResponse
     code: |-
-      pm.test('Status code là 400 Bad Request', function () {
-          pm.response.to.have.status(400);
+      pm.test('HTTP 409', function () {
+          pm.response.to.have.status(409);
+      });
+      pm.test('Kiểm tra dữ liệu phản hồi', function () {
+          const res = pm.response.json();
+          pm.expect(res.code).to.eql('INVALID_ORDER_TRANSITION');
       });
     language: text/javascript
 order: 5000

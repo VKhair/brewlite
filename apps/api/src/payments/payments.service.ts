@@ -37,7 +37,7 @@ export class PaymentsService {
       return payment.response;
     return {
       ...response,
-      message: 'Liên kết đã hết hạn. BrewLite đang chờ VNPay xác nhận kết quả.',
+      message: 'Liên kết VNPay đã hết hạn. Bạn có thể mở chi tiết đơn để hủy.',
     };
   }
 
@@ -53,7 +53,7 @@ export class PaymentsService {
         if (
           previous.orderId !== dto.orderId ||
           previous.paymentMethod !== dto.paymentMethod ||
-          previous.mockOutcome !== mockOutcome
+          (previous.mockOutcome ?? (previous.paymentMethod === 'VNPAY' ? null : 'SUCCESS')) !== mockOutcome
         ) {
           throw new ConflictException({
             code: 'IDEMPOTENCY_CONFLICT',
@@ -83,7 +83,10 @@ export class PaymentsService {
         },
         orderBy: { createdAt: 'desc' },
       });
-      if (pending) return this.paymentResponse(pending);
+      if (pending) throw new ConflictException({
+        code: 'PAYMENT_PENDING',
+        message: 'Hãy mở đơn trong lịch sử để tiếp tục lần thanh toán VNPay đang chờ.',
+      });
       if (order.status !== 'PENDING' && order.status !== 'PAYMENT_FAILED')
         throw new ConflictException({
           code: 'ORDER_NOT_PAYABLE',

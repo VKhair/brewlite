@@ -8,7 +8,7 @@ const paidStatuses = ["PAID", "PREPARING", "READY", "COMPLETED"];
 
 export function useOrderConfirmation() {
   const { id } = useParams<{ id: string }>(),
-    { ready, session, clear } = useAppStore(),
+    { ready, session, clearPaidCart } = useAppStore(),
     router = useRouter(),
     [order, setOrder] = useState<Order | null>(null),
     [error, setError] = useState(""),
@@ -29,7 +29,7 @@ export function useOrderConfirmation() {
         if (controller.signal.aborted) return;
         setOrder(result);
         setError("");
-        if (paidStatuses.includes(result.status)) clear();
+        if (paidStatuses.includes(result.status)) clearPaidCart(id);
         if (result.status === "PENDING" && Date.now() + 2_000 <= deadline) {
           timer = window.setTimeout(() => void load(), 2_000);
         }
@@ -47,7 +47,7 @@ export function useOrderConfirmation() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [id, ready, session, router, clear, refresh]);
+  }, [id, ready, session, router, clearPaidCart, refresh]);
 
   return {
     id,

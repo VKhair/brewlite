@@ -19,6 +19,8 @@ export type Order = {
   history?: { toStatus: string; createdAt: string }[];
   payments?: {
     paymentId: string;
+    idempotencyKey?: string;
+    expiresAt?: string;
     status: string;
     amount: number;
     paymentMethod: string;

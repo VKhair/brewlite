@@ -33,10 +33,20 @@ export default function OrderDetail() {
 
   const token = session?.access_token;
   const vnpayEnabled = process.env.NEXT_PUBLIC_PAYMENT_MODE === "vnpay";
-  const pendingVnpay = order?.payments?.some(
+  const pendingVnpay = order?.payments?.find(
     (payment) =>
       payment.paymentMethod === "VNPAY" && payment.status === "PENDING",
   );
+
+  const [expiredVnpay, setExpiredVnpay] = useState(false);
+  useEffect(() => {
+    const expiresAt = pendingVnpay?.expiresAt;
+    const remaining = expiresAt ? Date.parse(expiresAt) - Date.now() : Infinity;
+    const timer = window.setTimeout(() => setExpiredVnpay(remaining <= 0), 0);
+    const expiry = Number.isFinite(remaining) && remaining > 0
+      ? window.setTimeout(() => setExpiredVnpay(true), remaining) : undefined;
+    return () => { window.clearTimeout(timer); window.clearTimeout(expiry); };
+  }, [pendingVnpay?.expiresAt]);
 
   // Tự động lấy thông tin đơn hàng
   useEffect(() => {
@@ -129,7 +139,7 @@ export default function OrderDetail() {
         ...(vnpayEnabled
           ? { paymentMethod: "VNPAY" }
           : { paymentMethod: method, mockOutcome: "SUCCESS" }),
-      }, token, crypto.randomUUID());
+      }, token, pendingVnpay?.idempotencyKey ?? crypto.randomUUID());
 
       if (result.checkoutUrl) {
         window.location.assign(result.checkoutUrl);
@@ -242,7 +252,7 @@ export default function OrderDetail() {
                     </select>
                   )}
 
-                  <button className="btn" onClick={pay} disabled={busy}>
+                  <button className="btn" onClick={pay} disabled={busy || expiredVnpay}>
                     {busy
                       ? "Đang xử lý..."
                       : pendingVnpay
@@ -252,7 +262,7 @@ export default function OrderDetail() {
                 </div>
               )}
 
-              {order.status === "PENDING" && !pendingVnpay && (
+              {order.status === "PENDING" && (!pendingVnpay || expiredVnpay) && (
                 <button className="danger-btn" disabled={busy} onClick={cancel}>
                   Hủy đơn hàng
                 </button>

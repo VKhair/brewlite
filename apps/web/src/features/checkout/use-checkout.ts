@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/app/app-providers";
-import { createOrder } from "@/features/orders/orders.api";
+import { createOrder, getOrder } from "@/features/orders/orders.api";
 import { payForOrder } from "@/features/payments/payments.api";
 import type { MockPaymentMethod } from "@/features/payments/payment.types";
 
 export function useCheckout() {
-  const { cart, total, session, ready, clear } = useAppStore(),
+  const { cart, total, session, ready, currentCheckout, markCheckout, clearPaidCart } = useAppStore(),
     router = useRouter();
   const vnpayEnabled = process.env.NEXT_PUBLIC_PAYMENT_MODE === "vnpay";
   const [mockMethod, setMethod] = useState<MockPaymentMethod>("EWALLET"),
@@ -15,18 +15,38 @@ export function useCheckout() {
     [error, setError] = useState(""),
     [pendingOrder, setPendingOrder] = useState<string | null>(null);
   const inFlight = useRef(false);
-  const key = useRef<string | null>(null);
+
   const method = vnpayEnabled ? "VNPAY" : mockMethod;
   useEffect(() => {
     if (ready && !session) router.replace("/login?next=%2Fcheckout");
   }, [ready, session, router]);
   async function checkout() {
     if (!session || !cart.length || inFlight.current) return;
+    if (cart.length > 50) {
+      setError("Má»—i Ä‘Æ¡n hÃ ng chá»‰ Ä‘Æ°á»£c chá»©a tá»‘i Ä‘a 50 dÃ²ng sáº£n pháº©m.");
+      return;
+    }
     inFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      let orderId = pendingOrder;
+      const storageKey = "brewlite-checkout:" + session.user.id;
+      const saved = sessionStorage.getItem(storageKey);
+      const attempt: { orderId: string; key: string; payload: string } | null =
+        saved ? JSON.parse(saved) : null;
+      let orderId = currentCheckout();
+      if (orderId && (attempt?.orderId === orderId || pendingOrder === orderId)) {
+        const order = await getOrder(orderId, session.access_token);
+        if (["PAID", "PREPARING", "READY", "COMPLETED"].includes(order.status)) {
+          clearPaidCart(orderId);
+          sessionStorage.removeItem(storageKey);
+          router.push(`/success/${orderId}`);
+          return;
+        }
+        if (order.status === "CANCELLED") orderId = null;
+      } else {
+        orderId = null;
+      }
       if (!orderId) {
         const order = await createOrder(
           cart.map((item) => ({
@@ -39,9 +59,12 @@ export function useCheckout() {
         );
         orderId = order.orderId;
         setPendingOrder(orderId);
-        key.current = null;
+        markCheckout(orderId);
       }
-      if (!key.current) key.current = crypto.randomUUID();
+      const payload = JSON.stringify([method, method === "VNPAY" ? null : failDemo]);
+      const key = attempt?.orderId === orderId && attempt.payload === payload && attempt.key
+        ? attempt.key : crypto.randomUUID();
+      sessionStorage.setItem(storageKey, JSON.stringify({ orderId, key, payload }));
       const payment = await payForOrder(
         {
           orderId,
@@ -53,40 +76,33 @@ export function useCheckout() {
               }),
         },
         session.access_token,
-        key.current,
+        key,
       );
       if (payment.checkoutUrl) {
         window.location.assign(payment.checkoutUrl);
         return;
       }
-      key.current = null;
+      if (payment.paymentStatus === "FAILED") {
+        sessionStorage.setItem(storageKey, JSON.stringify({ orderId, key: "", payload }));
+      }
       if (payment.paymentStatus === "SUCCESS") {
-        clear();
+        clearPaidCart(orderId);
+        sessionStorage.removeItem(storageKey);
         router.push(`/success/${orderId}`);
       } else {
         setError(
-          `${payment.message} Bạn có thể thử lại hoặc xem đơn trong lịch sử.`,
+          `${payment.message} Báº¡n cÃ³ thá»ƒ thá»­ láº¡i hoáº·c xem Ä‘Æ¡n trong lá»‹ch sá»­.`,
         );
         setPendingOrder(orderId);
       }
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : "Không thể hoàn tất thanh toán.",
+        e instanceof Error ? e.message : "KhÃ´ng thá»ƒ hoÃ n táº¥t thanh toÃ¡n.",
       );
     } finally {
       inFlight.current = false;
       setBusy(false);
     }
-  }
-
-  function selectPaymentMethod(next: MockPaymentMethod) {
-    setMethod(next);
-    key.current = null;
-  }
-
-  function selectMockFailure(next: boolean) {
-    setFailDemo(next);
-    key.current = null;
   }
 
   return {
@@ -96,9 +112,9 @@ export function useCheckout() {
     ready,
     vnpayEnabled,
     method,
-    selectPaymentMethod,
+    selectPaymentMethod: setMethod,
     failDemo,
-    selectMockFailure,
+    selectMockFailure: setFailDemo,
     busy,
     error,
     pendingOrder,

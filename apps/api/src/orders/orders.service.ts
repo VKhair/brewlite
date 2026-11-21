@@ -4,6 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { OrderInventoryService } from '../inventory/order-inventory.service';
+import { VNPAY_CHECKOUT_TTL_MS } from '../payments/providers/vnpay.provider';
 import { randomUUID } from 'node:crypto';
 import type { AuthUser } from '../auth/auth.types';
 import { CouponsService } from '../coupons/coupons.service';
@@ -35,6 +37,7 @@ export class OrdersService {
     private readonly db: PrismaService,
     private readonly coupons: CouponsService,
     private readonly loyalty: OrderLoyaltyService,
+    private readonly inventory: OrderInventoryService,
   ) {}
 
   async snapshot(client: Client, item: OrderItemDto): Promise<ItemSnapshot> {
@@ -238,6 +241,10 @@ export class OrdersService {
       })),
       payments: order.payments.map((p) => ({
         paymentId: p.id,
+        ...(p.paymentMethod === 'VNPAY' && p.status === 'PENDING' ? {
+          idempotencyKey: p.idempotencyKey,
+          expiresAt: new Date(p.createdAt.getTime() + VNPAY_CHECKOUT_TTL_MS),
+        } : {}),
         paymentMethod: p.paymentMethod,
         amount: p.amount,
         status: p.status,
@@ -252,12 +259,26 @@ export class OrdersService {
       const pending = await tx.payment.findFirst({
         where: { orderId, paymentMethod: 'VNPAY', status: 'PENDING' },
       });
-      if (pending)
+      if (pending && Date.now() < pending.createdAt.getTime() + VNPAY_CHECKOUT_TTL_MS)
         throw new ConflictException({
           code: 'PAYMENT_PENDING',
           message: 'Đơn đang chờ VNPay xác nhận kết quả.',
         });
       assertTransition(order.status, 'CANCELLED');
+      if (pending) {
+        await this.inventory.reversePaymentConsumption(tx, pending.id);
+        await tx.payment.update({
+          where: { id: pending.id },
+          data: {
+            status: 'FAILED',
+            response: {
+              ...(pending.response as Prisma.JsonObject),
+              checkoutUrl: null, paymentStatus: 'FAILED', status: 'CANCELLED',
+              cartAction: 'KEEP', message: 'Đã hủy đơn sau khi liên kết VNPay hết hạn.',
+            },
+          },
+        });
+      }
       await this.loyalty.refund(tx, orderId, userId);
       await this.change(tx, order, 'CANCELLED', userId);
       return this.row(tx, orderId, userId);

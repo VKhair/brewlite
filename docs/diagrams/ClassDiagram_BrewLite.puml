@@ -10,7 +10,6 @@ package "Danh mục" {
     id: UUID
     basePrice: Int
     isAvailable: Boolean
-    stock: Int
   }
   class ProductSize {
     id: UUID
@@ -110,22 +109,30 @@ package "Kho" {
     id: Int
     name: String
     unit: String
-    onHand: Decimal
+    onHand: Decimal(14,3)
   }
   class ProductRecipe {
     id: Int
+    productId: UUID
+    ingredientId: Int
     size: String
-    quantity: Decimal
+    quantity: Decimal(12,3)
   }
   class ToppingRecipe {
     id: Int
-    quantity: Decimal
+    toppingId: UUID
+    ingredientId: Int
+    quantity: Decimal(12,3)
   }
   class InventoryMovement {
     id: Int
     type: String
     quantity: Decimal
     reason: String
+    ingredientId: Int
+    orderId: UUID?
+    paymentId: UUID?
+    createdAt: DateTime
   }
 }
 
@@ -149,6 +156,15 @@ Ingredient "1" -- "0..*" ProductRecipe
 Ingredient "1" -- "0..*" ToppingRecipe
 Ingredient "1" -- "0..*" InventoryMovement
 Order "0..1" -- "0..*" InventoryMovement
+Payment "0..1" -- "0..*" InventoryMovement : lần thanh toán
+note bottom of InventoryMovement
+  CONSUMPTION và REVERSAL theo paymentId.
+  Duy nhất theo paymentId, ingredientId, type.
+end note
+note bottom of ProductRecipe
+  Duy nhất theo productId, size, ingredientId.
+  size là tên size, không phải FK ProductSize.
+end note
 
 note bottom of Order
   OrderItem là snapshot trong Order.items (JSONB).

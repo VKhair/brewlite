@@ -16,6 +16,10 @@ export default function Register() {
     router = useRouter();
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (new TextEncoder().encode(password).length > 72) {
+      setError("Mật khẩu không được vượt quá 72 byte UTF-8.");
+      return;
+    }
     if (password !== confirm) {
       setError("Mật khẩu nhập lại chưa khớp");
       return;

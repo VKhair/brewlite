@@ -1,5 +1,5 @@
 $kind: http-request
-name: 6.4 Chặn quay lui State Machine (COMPLETED -> PENDING)
+name: 6.4 Chặn quay lui State Machine (COMPLETED -> PREPARING)
 url: "{{baseUrl}}/orders/{{orderId}}/status"
 method: PATCH
 headers:
@@ -8,7 +8,7 @@ body:
   type: text
   content: |-
     {
-      "status": "PENDING"
+      "status": "PREPARING"
     }
 auth:
   type: bearer
@@ -17,12 +17,12 @@ auth:
 scripts:
   - type: afterResponse
     code: |-
-      pm.test('Status code là 400 Bad Request', function () {
-          pm.response.to.have.status(400);
+      pm.test('HTTP 409', function () {
+          pm.response.to.have.status(409);
       });
-      pm.test('Thông báo lỗi chặn chuyển trạng thái không hợp lệ', function () {
+      pm.test('Kiểm tra dữ liệu phản hồi', function () {
           const res = pm.response.json();
-          pm.expect(res.message).to.include('không thể chuyển từ COMPLETED sang PENDING');
+          pm.expect(res.code).to.eql('INVALID_ORDER_TRANSITION');
       });
     language: text/javascript
 order: 4000

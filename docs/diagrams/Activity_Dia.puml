@@ -13,9 +13,9 @@ endif
 :Gửi POST /orders với các dòng hàng;
 
 |API và PostgreSQL|
-:Tính lại giá, kiểm tra lựa chọn và tồn;
+:Tính lại giá, kiểm tra lựa chọn;
 if (Tạo đơn được?) then (có)
-  :Ghi PENDING, snapshot, giữ tồn và lịch sử;
+  :Ghi PENDING, snapshot và lịch sử;
 else (lỗi)
   :Rollback và trả lỗi;
   |Web|
@@ -26,6 +26,22 @@ endif
 |Web|
 :Gửi POST /payments với khóa UUID v4;
 
+|API và PostgreSQL|
+:Kiểm tra quyền, trạng thái và khóa idempotency;
+if (Lần thử mới hợp lệ?) then (có)
+else (replay hoặc xung đột)
+  :Trả kết quả đã lưu hoặc lỗi 409;
+  stop
+endif
+:Tính nguyên liệu theo size, topping và số lượng;
+if (Đủ công thức và số dư?) then (có)
+  :Trừ tồn và ghi tiêu hao theo paymentId trong transaction;
+else (thiếu)
+  :Rollback thanh toán;
+  |Web|
+  :Báo lỗi và giữ giỏ;
+  stop
+endif
 |API và PostgreSQL|
 if (Chế độ VNPay?) then (VNPay)
   :Tạo Payment PENDING và URL có chữ ký;
@@ -54,7 +70,7 @@ if (Đã có kết quả chốt?) then (có)
   if (Thành công?) then (có)
     :Ghi SUCCESS, PAID và cộng điểm;
     |Web|
-    :Hiển thị kết quả và xóa giỏ;
+    :Hiển thị kết quả và xóa giỏ gắn với đơn;
   else (lỗi)
     |API và PostgreSQL|
     :Ghi FAILED, PAYMENT_FAILED và hoàn tồn;
@@ -64,6 +80,11 @@ if (Đã có kết quả chốt?) then (có)
 else (chờ IPN)
   |Web|
   :Trang kết quả hỏi lại khi còn PENDING;
+  if (Chủ đơn yêu cầu hủy sau khi link hết hạn?) then (có)
+    |API và PostgreSQL|
+    :Khóa đơn, đánh dấu Payment FAILED;
+    :Hoàn nguyên liệu và điểm, ghi CANCELLED trong transaction;
+  endif
 endif
 stop
 @enduml

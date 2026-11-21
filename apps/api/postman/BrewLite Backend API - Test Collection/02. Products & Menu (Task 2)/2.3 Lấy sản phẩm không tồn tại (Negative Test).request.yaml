@@ -1,5 +1,5 @@
 $kind: http-request
-url: "{{baseUrl}}/products/99999"
+url: "{{baseUrl}}/products/10000000-0000-4000-8000-000000000099"
 method: GET
 scripts:
   - type: afterResponse

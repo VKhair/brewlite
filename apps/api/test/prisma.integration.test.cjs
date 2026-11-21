@@ -102,7 +102,8 @@ test('VNPay signs checkout and settles only via a valid IPN, once per attempt', 
     const [signedQuery, checksum] = url.search.slice(1).split('&vnp_SecureHash=');
     assert.equal(checksum, digest(signedQuery));
     assert.equal(url.searchParams.get('vnp_Amount'), String(totalAmount * 100));
-    assert.equal((await pay(randomUUID())).body.checkoutUrl, first.body.checkoutUrl);
+    assert.equal((await pay(randomUUID())).status, 409);
+    assert.equal((await pay(key)).body.checkoutUrl, first.body.checkoutUrl);
     assert.equal(await onHand('coffee'), coffeeBefore - 3);
     assert.equal((await request(`/orders/${orderId}/cancel`, { method: 'PATCH' })).status, 409);
 
@@ -131,7 +132,7 @@ test('VNPay signs checkout and settles only via a valid IPN, once per attempt', 
       where: { id: first.body.paymentId },
       data: { createdAt: new Date(Date.now() - 16 * 60_000) },
     });
-    const expired = await pay(randomUUID());
+    const expired = await pay(key);
     assert.equal(expired.body.paymentId, first.body.paymentId);
     assert.equal(expired.body.checkoutUrl, undefined);
     assert.equal(expired.body.paymentStatus, 'PENDING');
@@ -154,6 +155,14 @@ test('VNPay signs checkout and settles only via a valid IPN, once per attempt', 
     assert.equal(await prisma.inventoryMovement.count({ where: { paymentId: retry.body.paymentId, type: 'REVERSAL' } }), 0);
     assert.equal(paid.history.filter(entry => entry.toStatus === 'PAID').length, 1);
     assert.equal(await prisma.loyaltyTransaction.count({ where: { orderId, type: 'EARN' } }), 1);
+    const another = await createOrder([{ productId: products[0], quantity: 1 }]);
+    const cancelKey = randomUUID();
+    const attempt = () => request('/payments', { method: 'POST', key: cancelKey, body: { orderId: another.orderId, paymentMethod: 'VNPAY' } });
+    const started = await attempt();
+    await prisma.payment.update({ where: { id: started.body.paymentId }, data: { createdAt: new Date(Date.now() - 16 * 60_000) } });
+    assert.equal((await request('/orders/' + another.orderId + '/cancel', { method: 'PATCH' })).body.status, 'CANCELLED');
+    assert.equal((await attempt()).body.paymentStatus, 'FAILED');
+    assert.equal(await onHand('coffee'), coffeeBefore - 3);
   } finally {
     await vnpayApp.close();
   }

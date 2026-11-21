@@ -5,44 +5,140 @@ on:
     branches: [main]
   push:
     branches: [main]
+    tags: ['v*']
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
-    name: Install · Lint · Test · Build
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres: &postgres
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: brewlite_ci
+          POSTGRES_PASSWORD: ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 3s --health-retries 15
+    env:
+      DATABASE_URL: postgresql://postgres:ci@127.0.0.1:5432/brewlite_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm run test:api
+      - run: npm run build
+      - run: npm run test:integration
+      - run: npm run test:e2e --workspace=api
+
+  browser:
+    name: Browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres: *postgres
+    env:
+      DATABASE_URL: postgresql://postgres:ci@127.0.0.1:5432/brewlite_ci
+      JWT_SECRET: isolated-browser-e2e-test-secret-for-ci
+      PAYMENT_MODE: mock
+      NEXT_PUBLIC_PAYMENT_MODE: mock
+      API_INTERNAL_URL: http://127.0.0.1:3003
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - run: npm run db:setup
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-e2e-trace
+          path: apps/web/test-results/
+          retention-days: 3
+
+  images:
+    name: Publish images
+    if: github.event_name == 'push'
+    needs: [quality, browser]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      prefix: ${{ steps.registry.outputs.prefix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: registry
+        run: echo "prefix=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish API and web for this commit
+        env:
+          PREFIX: ${{ steps.registry.outputs.prefix }}
+        run: |
+          docker build -f apps/api/Dockerfile -t "$PREFIX-api:$GITHUB_SHA" .
+          docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_PAYMENT_MODE=vnpay -t "$PREFIX-web:$GITHUB_SHA" .
+          docker push "$PREFIX-api:$GITHUB_SHA"
+          docker push "$PREFIX-web:$GITHUB_SHA"
+
+  deploy:
+    name: Deploy and verify production
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: images
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      # Prisma 7 loads DATABASE_URL from its config even for client generation.
-      # This placeholder is never used for a database connection in CI.
-      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/brewlite_ci
+    environment: production
+    concurrency: brewlite-production
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Generate Prisma Client
-        run: npm run db:generate
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
+      - name: Deploy both SHA-tagged images to Lightsail
+        env:
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          PREFIX: ${{ needs.images.outputs.prefix }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_deploy "$DEPLOY_TARGET" bash -se -- "$PREFIX" "$GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/brewlite
+          prefix=$1
+          sha=$2
+          release=$(mktemp ./release.XXXXXX.yaml)
+          trap 'rm -f "$release"' EXIT
+          printf 'services:\n  api:\n    image: %s-api:%s\n  web:\n    image: %s-web:%s\n' "$prefix" "$sha" "$prefix" "$sha" > "$release"
+          compose=(docker compose -p brewlite-server -f compose.yaml -f "$release")
+          "${compose[@]}" pull api web
+          "${compose[@]}" up -d --no-build --wait --wait-timeout 180 api web
+          for service in api web; do
+            actual=$(docker inspect --format '{{.Image}}' "$("${compose[@]}" ps -q "$service")")
+            expected=$(docker image inspect --format '{{.Id}}' "$prefix-$service:$sha")
+            test "$actual" = "$expected"
+          done
+          mv "$release" release.compose.yaml
+          REMOTE
+      - name: Verify public API and PostgreSQL readiness
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --max-time 15 \
+            https://brewlite.vkhair.dev/api/backend/health | jq -e '.status == "ok" and .database == "ok"'

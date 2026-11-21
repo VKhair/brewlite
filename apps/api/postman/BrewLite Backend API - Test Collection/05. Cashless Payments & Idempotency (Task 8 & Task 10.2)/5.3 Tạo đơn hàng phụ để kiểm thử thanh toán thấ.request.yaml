@@ -10,8 +10,7 @@ body:
     {
       "items": [
         {
-          "productId": 2,
-          "size": "S",
+          "productId": "10000000-0000-4000-8000-000000000002",
           "quantity": 1
         }
       ]
@@ -28,7 +27,7 @@ scripts:
       });
       pm.test('Lưu secondOrderId', function () {
           const res = pm.response.json();
-          pm.environment.set('secondOrderId', res.id);
+          pm.environment.set('secondOrderId', res.orderId);
           pm.environment.set('secondOrderCode', res.orderCode);
       });
     language: text/javascript

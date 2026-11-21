@@ -1,5 +1,5 @@
 $kind: http-request
-name: 1.5 Lấy thông tin tài khoản hiện tại GET /auth/me
+name: 1.5 Route cũ GET /auth/me trả 404
 url: "{{baseUrl}}/auth/me"
 method: GET
 auth:
@@ -9,13 +9,8 @@ auth:
 scripts:
   - type: afterResponse
     code: |-
-      pm.test('Status code là 200 OK', function () {
-          pm.response.to.have.status(200);
-      });
-      pm.test('Trả về đúng thông tin user của token', function () {
-          const res = pm.response.json();
-          pm.expect(res.email).to.eql(pm.environment.get('customerEmail'));
-          pm.expect(res.role).to.eql('CUSTOMER');
+      pm.test('HTTP 404', function () {
+          pm.response.to.have.status(404);
       });
     language: text/javascript
 order: 5000

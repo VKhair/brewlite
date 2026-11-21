@@ -15,8 +15,7 @@ scripts:
           const firstItem = res[0];
           pm.expect(firstItem).to.have.property('id');
           pm.expect(firstItem).to.have.property('name');
-          pm.expect(firstItem).to.have.property('price');
-          pm.expect(firstItem).to.have.property('stock');
+          pm.expect(firstItem).to.have.property('basePrice');
           pm.expect(firstItem).to.have.property('category');
       });
     language: text/javascript

@@ -1,0 +1,48 @@
+$kind: http-request
+url: "{{baseUrl}}/orders"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{customerToken}}
+body:
+  type: json
+  content: |-
+    {
+      "items": [
+        {
+          "productId": "{{testProductId}}",
+          "sizeId": "{{sizeId}}",
+          "quantity": 1
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        if (pm.response.code === 201 && data?.orderId && data?.orderCode) {
+          pm.environment.set('orderId', data.orderId);
+          pm.environment.set('orderCode', data.orderCode);
+        }
+        let passed = false;
+        pm.test('Đơn PENDING có đúng khách, món, kích cỡ, số lượng và tổng tiền', () => {
+          pm.response.to.have.status(201);
+          pm.expect(data.userId).to.equal(pm.environment.get('customerId'));
+          pm.expect(data.status).to.equal('PENDING');
+          pm.expect(data.orderId).to.be.a('string').and.not.empty;
+          pm.expect(data.orderCode).to.be.a('string').and.not.empty;
+          pm.expect(data.items).to.have.lengthOf(1);
+          pm.expect(data.items[0]).to.include({ productId: pm.environment.get('testProductId'), sizeId: pm.environment.get('sizeId'), quantity: 1, lineTotal: Number(pm.environment.get('expectedTotal')) });
+          pm.expect(data.totalAmount).to.equal(Number(pm.environment.get('expectedTotal')));
+          passed = true;
+        });
+        if (!passed) {
+          pm.execution.setNextRequest(null);
+        } else {
+          if (pm.environment.get('checkoutMode') === 'vnpay') pm.execution.setNextRequest('09 Khởi tạo VNPay Sandbox');
+        }
+      })();
+    language: text/javascript
+order: 7000

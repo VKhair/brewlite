@@ -16,12 +16,12 @@ Customer -> Browser : Xác nhận checkout
 Browser -> Next : POST /api/backend/orders + Bearer
 Next -> API : POST /orders
 API -> API : Xác minh JWT và kiểm tra DTO
-API -> DB : BEGIN; tính giá, kiểm tra và giữ tồn
-alt Hợp lệ và đủ tồn
-  API -> DB : Ghi PENDING, snapshot, lịch sử; COMMIT
+API -> DB : BEGIN; kiểm tra lựa chọn và tính giá
+alt Đơn hợp lệ
+  API -> DB : Ghi PENDING, snapshot, lịch sử và điểm đã dùng; COMMIT
   API --> Next : 201 Order
   Next --> Browser : 201 Order
-else Hết hàng hoặc lựa chọn không khả dụng
+else Dữ liệu hoặc lựa chọn không hợp lệ
   API -> DB : ROLLBACK
   API --> Next : Lỗi nghiệp vụ
   Next --> Browser : Hiện lỗi và giữ giỏ
@@ -33,25 +33,36 @@ end
 Browser -> Next : POST /api/backend/payments\nBearer, Idempotency-Key, orderId, paymentMethod
 Next -> API : POST /payments
 API -> API : Xác minh JWT, DTO và UUID v4 của key
-API -> DB : Khóa người dùng, tra khóa, kiểm tra và khóa đơn
+API -> DB : BEGIN; khóa người dùng, tra key, khóa đơn nếu là lần thử mới
 alt Đã có cùng key và payload
   API --> Next : Trả kết quả đã lưu
   Next --> Browser : Kết quả hoặc checkoutUrl còn hạn
 else Key trùng nhưng payload khác
   API --> Next : 409 IDEMPOTENCY_CONFLICT
   Next --> Browser : Hiện lỗi
-else Lần thử mới ở chế độ mock
+else VNPay đang PENDING với key khác
+  API --> Next : 409 PAYMENT_PENDING
+  Next --> Browser : Mở chi tiết đơn để tiếp tục
+else Lần thử mới hợp lệ
+  API -> DB : Nếu retry, kiểm tra lại lựa chọn và ghi PENDING
+  API -> DB : Tính định lượng size/topping, trừ tồn có điều kiện
+  break Thiếu công thức hoặc nguyên liệu
+    API -> DB : ROLLBACK
+    API --> Next : Lỗi thanh toán
+    Next --> Browser : Báo lỗi và giữ giỏ
+  end
+  alt Chế độ mock
   API -> Mock : charge theo số tiền đã lưu và mockOutcome
   Mock --> API : SUCCESS hoặc FAILED
   alt Thành công
-    API -> DB : Ghi SUCCESS, PAID và cộng điểm
+    API -> DB : Ghi Payment SUCCESS, tiêu hao, PAID và điểm; COMMIT
   else Thất bại
-    API -> DB : Ghi FAILED, PAYMENT_FAILED và hoàn tồn
+    API -> DB : Ghi Payment FAILED, tiêu hao và hoàn theo paymentId; ghi PAYMENT_FAILED; COMMIT
   end
   API --> Next : Kết quả và cartAction
   Next --> Browser : Kết quả
 else VNPay
-  API -> DB : Ghi Payment PENDING và mã lần thử
+  API -> DB : Ghi Payment PENDING, mã thử và tiêu hao theo paymentId; COMMIT
   API --> Next : checkoutUrl có chữ ký, hạn 15 phút
   Next --> Browser : checkoutUrl
   Browser -> Vnpay : Mở cổng Sandbox
@@ -63,15 +74,18 @@ else VNPay
   else IPN trực tiếp
     Vnpay -> API : GET /payments/vnpay/ipn
     API -> API : Xác minh chữ ký và mã terminal
-    API -> DB : Khoá dòng, đối chiếu tham chiếu và số tiền
+    API -> DB : BEGIN; khóa người dùng và đơn, đối chiếu tham chiếu và số tiền
     alt IPN xác nhận thành công
-      API -> DB : Ghi SUCCESS, PAID và cộng điểm
+      API -> DB : Ghi SUCCESS, PAID và cộng điểm; COMMIT
     else IPN xác nhận thất bại
-      API -> DB : Ghi FAILED, PAYMENT_FAILED và hoàn tồn
+      API -> DB : Ghi FAILED, PAYMENT_FAILED và hoàn tồn theo paymentId; COMMIT
+    else IPN thành công sau hủy
+      API -> DB : Đánh dấu cần đối soát hoàn tiền
     else IPN không hợp lệ hoặc đã xác nhận
       API -> API : Trả mã phù hợp và giữ dữ liệu
     end
     API --> Vnpay : HTTP 200 với RspCode và Message
+  end
   end
 end
 
@@ -83,7 +97,20 @@ opt Trang kết quả được mở
   Next --> Browser : Chi tiết đơn
   note over Browser
     Khi PENDING, hỏi lại khoảng 2 giây một lần
-    trong tối đa 30 giây. Xóa giỏ khi đơn đã trả tiền.
+    trong tối đa 30 giây. Xóa giỏ còn gắn với đơn đã trả tiền.
   end note
+end
+opt Chủ đơn yêu cầu hủy đơn PENDING
+  Browser -> Next : PATCH /api/backend/orders/:id/cancel + Bearer
+  Next -> API : PATCH /orders/:id/cancel
+  API -> DB : BEGIN; khóa người dùng và đơn
+  alt VNPay đang PENDING và còn hạn
+    API --> Next : 409 PAYMENT_PENDING
+  else Hủy hợp lệ
+    API -> DB : Nếu VNPay quá hạn, ghi FAILED và hoàn tồn theo paymentId
+    API -> DB : Hoàn điểm, ghi CANCELLED và lịch sử; COMMIT
+    API --> Next : 200 CANCELLED
+  end
+  Next --> Browser : Kết quả hủy
 end
 @enduml

@@ -16,11 +16,11 @@ scripts:
       pm.test('Status code là 200 OK', function () {
           pm.response.to.have.status(200);
       });
-      pm.test('Xác nhận role BARISTA và gán baristaToken', function () {
+      pm.test('Xác nhận role STAFF và gán baristaToken', function () {
           const res = pm.response.json();
-          pm.expect(res).to.have.property('accessToken');
-          pm.environment.set('baristaToken', res.accessToken);
-          pm.expect(res.user.role).to.eql('BARISTA');
+          pm.expect(res).to.have.property('access_token');
+          pm.environment.set('baristaToken', res.access_token);
+          pm.expect(res.user.role).to.eql('STAFF');
       });
     language: text/javascript
 order: 3000

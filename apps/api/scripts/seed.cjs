@@ -22,7 +22,7 @@ async function main() {
       ['10000000-0000-4000-8000-000000000004', 'Cacao đá', 'Cacao sữa đá.', 35000, 'Cacao', false],
     ];
     for (const [id, name, description, basePrice, category, isAvailable] of products) {
-      await prisma.product.upsert({ where: { id }, update: {}, create: { id, name, description, basePrice, imageUrl: '/images/drink.svg', category, isAvailable, stock: 100 } });
+      await prisma.product.upsert({ where: { id }, update: {}, create: { id, name, description, basePrice, imageUrl: '/images/drink.svg', category, isAvailable } });
       for (const [size, priceDelta] of [['S', -5000], ['M', 0], ['L', 10000]]) {
         await prisma.productSize.upsert({ where: { productId_name: { productId: id, name: size } }, update: {},
           create: { id: sizeId(id, size), productId: id, name: size, priceDelta, isDefault: size === 'M' } });
@@ -47,7 +47,33 @@ async function main() {
     for (const [name, unit] of [['Cà phê', 'g'], ['Sữa', 'ml'], ['Nước', 'ml'], ['Trà', 'g'], ['Đào', 'g'], ['Cam', 'g'], ['Sả', 'g'], ['Matcha', 'g'], ['Trân châu trắng', 'g'], ['Kem Cheese', 'g']]) {
       await prisma.ingredient.upsert({ where: { name }, update: {}, create: { name, unit, onHand: 0 } });
     }
-    console.log('Prisma seed completed; existing product and stock values were preserved.');
+    // Dedicated demo balances are initialized once. Re-running setup preserves sales and adjustments.
+    const recipes = [
+      ['Cà phê phin mẫu', 'g', 15], ['Trà đào mẫu', 'g', 12],
+      ['Matcha mẫu', 'g', 8], ['Cacao mẫu', 'g', 10],
+    ];
+    await prisma.$transaction(async tx => {
+      for (const [index, [name, unit, portion]] of recipes.entries()) {
+        const ingredient = await tx.ingredient.upsert({
+          where: { name }, update: {}, create: { name, unit, onHand: 10000 },
+        });
+        for (const [size, factor] of [['S', 0.75], ['M', 1], ['L', 1.25]]) {
+          const productId = products[index][0];
+          if (!await tx.productRecipe.findFirst({ where: { productId, size } })) {
+            await tx.productRecipe.create({ data: { productId, size, ingredientId: ingredient.id, quantity: portion * factor } });
+          }
+        }
+      }
+      for (const [toppingId, toppingName] of toppings) {
+        if (await tx.toppingRecipe.findFirst({ where: { toppingId } })) continue;
+        const name = toppingName + ' mẫu';
+        const ingredient = await tx.ingredient.upsert({
+          where: { name }, update: {}, create: { name, unit: 'g', onHand: 5000 },
+        });
+        await tx.toppingRecipe.create({ data: { toppingId, ingredientId: ingredient.id, quantity: 15 } });
+      }
+    });
+    console.log('Prisma seed completed; existing products and ingredients were preserved.');
   } finally { await prisma.$disconnect(); }
 }
 

@@ -7,7 +7,7 @@ COPY apps/web/package.json apps/web/package.json
 RUN npm ci
 
 COPY apps/api apps/api
-RUN npm run build:api
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npm run build:api
 
 FROM node:24-alpine AS runner
 

@@ -1,15 +1,14 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
-import { AdminGuard } from '../admin.guard';
-import { JwtModule } from '@nestjs/jwt';
-import { JwtGuard, jwtOptions } from '../auth';
+import { InventoryRecipesService } from './inventory-recipes.service';
+import { OrderInventoryService } from './order-inventory.service';
 
 @Module({
-  imports: [PrismaModule, JwtModule.registerAsync({ useFactory: jwtOptions })],
+  imports: [AuthModule],
   controllers: [InventoryController],
-  providers: [InventoryService, AdminGuard, JwtGuard],
-  exports: [InventoryService],
+  providers: [InventoryService, InventoryRecipesService, OrderInventoryService],
+  exports: [OrderInventoryService],
 })
 export class InventoryModule {}

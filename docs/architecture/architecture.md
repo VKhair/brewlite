@@ -36,7 +36,7 @@ Tài liệu Task 3.1 kết hợp sơ đồ ranh giới hệ thống với kiến
 
 ## 2. Frontend
 
-[`layout.tsx`](../../apps/web/src/app/layout.tsx) thiết lập metadata, bố cục chung và `StoreProvider`. [`components/ui.tsx`](../../apps/web/src/components/ui.tsx) chứa các thành phần dùng chung cho điều hướng, thẻ sản phẩm, chọn số lượng và hiển thị trạng thái. Ảnh tĩnh nằm trong `apps/web/public`. [`manifest.ts`](../../apps/web/src/app/manifest.ts) khai báo chế độ hiển thị `standalone` và biểu tượng PWA.
+[`layout.tsx`](../../apps/web/src/app/layout.tsx) thiết lập metadata, bố cục chung và AppProviders. Header và footer nằm trong [bố cục dùng chung](../../apps/web/src/shared/layout). [MenuProducts](../../apps/web/src/features/products/menu-products.tsx) và thẻ sản phẩm thuộc tính năng products. Ảnh tĩnh nằm trong `apps/web/public`. [`manifest.ts`](../../apps/web/src/app/manifest.ts) khai báo chế độ hiển thị `standalone` và biểu tượng PWA.
 
 | Route | Hành vi |
 | --- | --- |
@@ -47,13 +47,13 @@ Tài liệu Task 3.1 kết hợp sơ đồ ranh giới hệ thống với kiến
 | `/orders`, `/orders/[id]` | Xem đơn của tài khoản, lịch sử trạng thái và giao dịch, làm mới, hủy hoặc thanh toán lại khi phù hợp. |
 | `/success/[id]` | Đọc trạng thái đơn từ API. Khi đơn còn `PENDING`, hỏi lại khoảng mỗi 2 giây trong tối đa 30 giây và cho phép làm mới thủ công. Xóa giỏ khi đơn đã thanh toán. |
 
-[`store.tsx`](../../apps/web/src/lib/store.tsx) dùng React Context để quản lý giỏ và phiên. `localStorage` lưu `brewlite-cart` và `brewlite-session`, gồm cả access token. Số lượng và giá trong giỏ phục vụ hiển thị. API là nơi xác định giá và khả năng đáp ứng đơn.
+[`app-providers.tsx`](../../apps/web/src/app/app-providers.tsx) kết hợp [trạng thái giỏ hàng](../../apps/web/src/features/cart/use-cart-state.ts) và [trạng thái phiên](../../apps/web/src/features/auth/use-session-state.ts), đồng thời cung cấp trạng thái khôi phục chung qua React Context. `localStorage` lưu `brewlite-cart` và `brewlite-session`, gồm cả access token. Số lượng và giá trong giỏ phục vụ hiển thị. API là nơi xác định giá và khả năng đáp ứng đơn.
 
-[`api.ts`](../../apps/web/src/lib/api.ts) gọi `fetch` với `cache: 'no-store'`, gắn Bearer token khi cần và chuyển lỗi HTTP thành thông báo cho UI. Request đi đến `/api/backend/...` trên cùng origin. [`next.config.ts`](../../apps/web/next.config.ts) rewrite đường dẫn này sang NestJS theo `API_INTERNAL_URL`. Cách này cho phép trình duyệt dùng một origin và web dùng địa chỉ API nội bộ trong Compose. Cấu hình `NEXT_PUBLIC_PAYMENT_MODE` quyết định UI hiển thị mock hay VNPay.
+[`http-client.ts`](../../apps/web/src/shared/api/http-client.ts) gọi `fetch` với `cache: 'no-store'`, gắn Bearer token khi cần và chuyển lỗi HTTP thành thông báo cho UI. Request đi đến `/api/backend/...` trên cùng origin. [`next.config.ts`](../../apps/web/next.config.ts) rewrite đường dẫn này sang NestJS theo `API_INTERNAL_URL`. Cách này cho phép trình duyệt dùng một origin và web dùng địa chỉ API nội bộ trong Compose. Cấu hình `NEXT_PUBLIC_PAYMENT_MODE` quyết định UI hiển thị mock hay VNPay.
 
 ## 3. Backend và hợp đồng HTTP
 
-[`main.ts`](../../apps/api/src/main.ts) nạp cấu hình local, khởi tạo NestJS trên Express và gọi [`configureHttp`](../../apps/api/src/http.ts). [`AppModule`](../../apps/api/src/app.module.ts) nạp `JwtModule` và `PrismaModule`, đồng thời đăng ký trực tiếp controller, service và guard, gồm cả coupon và kho. Controller nhận HTTP, DTO và pipe kiểm tra dữ liệu, service điều phối nghiệp vụ và PrismaService quản lý kết nối PostgreSQL. Xem [PrismaService và vòng đời kết nối](../../apps/api/src/prisma/prisma.service.ts).
+[`main.ts`](../../apps/api/src/main.ts) nạp cấu hình local, khởi tạo NestJS trên Express và gọi [`configure-http.ts`](../../apps/api/src/common/http/configure-http.ts). [`AppModule`](../../apps/api/src/app.module.ts) ghép các module Auth, Products, Orders, Payments, Coupons và Inventory với PrismaModule. AuthModule cấu hình JWT và xuất guard cho các module cần xác thực. Controller nhận HTTP, DTO và pipe kiểm tra dữ liệu, service điều phối nghiệp vụ và PrismaService quản lý kết nối PostgreSQL. Xem [PrismaService và vòng đời kết nối](../../apps/api/src/prisma/prisma.service.ts).
 
 | Nhóm | Endpoint thực tế | Quyền |
 | --- | --- | --- |
@@ -68,32 +68,32 @@ Tài liệu Task 3.1 kết hợp sơ đồ ranh giới hệ thống với kiến
 | Kho nguyên liệu | `GET /inventory/ingredients`, `POST /inventory/ingredients`, `PATCH /inventory/ingredients/:id`, `POST /inventory/ingredients/:id/movements` | `ADMIN`. ID nguyên liệu là số nguyên. |
 | Công thức | `GET /inventory/products/:productId/recipes`, `PUT /inventory/products/:productId/recipes/:size`, `GET /inventory/toppings/recipes`, `PUT /inventory/toppings/:toppingId/recipe` | `ADMIN`. `PUT` thay tập nguyên liệu của size hoặc topping. |
 
-[`auth.ts`](../../apps/api/src/auth.ts) chuẩn hóa email, băm mật khẩu bằng bcrypt và ký JWT HS256 có thời hạn, issuer và audience. `JwtGuard` kiểm tra token rồi đọc người dùng và vai trò từ DB trên mỗi request được bảo vệ. Đăng xuất trên web xóa phiên ở trình duyệt. Token đã cấp có hiệu lực đến khi hết hạn nếu tài khoản còn tồn tại.
+[`auth.service.ts`](../../apps/api/src/auth/auth.service.ts) chuẩn hóa email, băm mật khẩu bằng bcrypt và ký JWT HS256 có thời hạn, issuer và audience. `JwtGuard` kiểm tra token rồi đọc người dùng và vai trò từ DB trên mỗi request được bảo vệ. Đăng xuất trên web xóa phiên ở trình duyệt. Token đã cấp có hiệu lực đến khi hết hạn nếu tài khoản còn tồn tại.
 
-[`http.ts`](../../apps/api/src/http.ts) giới hạn body ở 64 KB và kiểm tra cấu trúc body. [`validation.ts`](../../apps/api/src/validation.ts) cấu hình pipe toàn cục để chuyển đổi DTO và từ chối trường ngoài hợp đồng. [`api-error.filter.ts`](../../apps/api/src/api-error.filter.ts) chuẩn hóa lỗi thành JSON có `statusCode`, `code`, `message`, `details`, `requestId`, `path` và `timestamp`. Lỗi phía máy chủ có `X-Request-Id` để đối chiếu với log. IPN trả HTTP `200` kèm `RspCode` và `Message` theo giao thức VNPay.
+[`configure-http.ts`](../../apps/api/src/common/http/configure-http.ts) giới hạn body ở 64 KB và kiểm tra cấu trúc body. [`validation.pipe.ts`](../../apps/api/src/common/validation/validation.pipe.ts) cấu hình pipe toàn cục để chuyển đổi DTO và từ chối trường ngoài hợp đồng. [`api-error.filter.ts`](../../apps/api/src/common/http/api-error.filter.ts) chuẩn hóa lỗi thành JSON có `statusCode`, `code`, `message`, `details`, `requestId`, `path` và `timestamp`. Lỗi phía máy chủ có `X-Request-Id` để đối chiếu với log. IPN trả HTTP `200` kèm `RspCode` và `Message` theo giao thức VNPay.
 
 ## 4. Dữ liệu và tính nhất quán
 
 | Nhóm | Model Prisma | Vai trò |
 | --- | --- | --- |
 | Tài khoản | `User`, `LoyaltyTransaction` | Hồ sơ, vai trò, số dư điểm và sổ điểm `EARN`, `REDEEM`, `REFUND`. |
-| Danh mục | `Product`, `ProductSize`, `Topping`, `ProductTopping` | Giá gốc và tồn theo món, chênh lệch giá theo size, quan hệ nhiều-nhiều giữa món và topping. |
+| Danh mục | `Product`, `ProductSize`, `Topping`, `ProductTopping` | Giá gốc, chênh lệch giá theo size, quan hệ nhiều-nhiều giữa món và topping. |
 | Đơn hàng | `Order`, `OrderStatusHistory` | Chủ đơn, mã hiển thị `BL-…`, tổng tiền và lịch sử chuyển trạng thái có thứ tự. `Order.items` lưu các dòng hàng dưới dạng JSONB. |
 | Thanh toán | `Payment` | Mỗi lần thử lưu phương thức, số tiền, kết quả, khóa idempotency và phản hồi đã ghi. Lần thử VNPay có thêm mã giao dịch và URL checkout. |
 | Khuyến mãi | `Coupon` | Mã duy nhất, giảm theo phần trăm hoặc số tiền cố định, mức đơn tối thiểu, giảm tối đa và cờ kích hoạt. |
-| Kho | `Ingredient`, `ProductRecipe`, `ToppingRecipe`, `InventoryMovement` | Tồn nguyên liệu dạng decimal, định lượng theo size hoặc topping, nhật ký nhập, điều chỉnh, tiêu hao và hoàn kho. |
+| Kho | `Ingredient`, `ProductRecipe`, `ToppingRecipe`, `InventoryMovement` | Tồn nguyên liệu dạng decimal, định lượng ProductRecipe theo sản phẩm và tên size, ToppingRecipe theo topping. InventoryMovement ghi nhập và điều chỉnh kho. Tiêu hao và hoàn kho gắn paymentId, với khóa duy nhất theo paymentId, ingredientId và type. |
 
 Tiền lưu dưới dạng số nguyên VND. Snapshot dòng hàng chốt tên món, size, topping, số lượng và giá khi tạo đơn, giúp lịch sử giữ đúng nội dung ngay cả khi thực đơn thay đổi. `OrderStatusHistory` ghi trạng thái trước, sau và người thực hiện. PostgreSQL bổ sung khóa ngoại, `CHECK`, khóa duy nhất theo `(user_id, idempotency_key)` và chỉ mục duy nhất có điều kiện để mỗi đơn có tối đa một thanh toán `SUCCESS`. Xem [Prisma schema](../../apps/api/prisma/schema.prisma), [migration SQL](../../apps/api/prisma/migrations) và [sơ đồ mô hình dữ liệu](../diagrams/ClassDiagram_BrewLite.puml).
 
-Tồn được quản lý ở hai cấp. `Product.stock` áp dụng cho mọi món. Hệ thống cộng nhu cầu theo từng nguyên liệu từ các công thức đã cấu hình, nhân với số lượng món và ghi biến động. Món chưa có công thức vẫn bán dựa trên tồn theo sản phẩm. Cập nhật tồn dùng điều kiện số dư đủ và thực hiện theo thứ tự định danh. Các luồng thanh toán, hủy và đổi trạng thái khóa dòng bằng `SELECT … FOR UPDATE` ở những bước cần đồng bộ. [`OrdersService`](../../apps/api/src/orders.ts) cập nhật trạng thái theo giá trị hiện tại và ghi lịch sử trong cùng transaction.
+Tồn bán được xác định từ lượng nguyên liệu và công thức hiện hành. Khi thanh toán, API nhân định lượng theo size và topping với số lượng món rồi cộng nhu cầu theo từng nguyên liệu. PostgreSQL trừ tồn theo thứ tự ID với điều kiện số dư đủ ngay trong câu lệnh cập nhật. Nếu thiếu một nguyên liệu, transaction hoàn tác toàn bộ khoản trừ. Biến động tiêu hao và hoàn kho gắn với từng lần thanh toán. Xem [dịch vụ kho](../../apps/api/src/inventory/order-inventory.service.ts).
 
 ## 5. Luồng đặt món và thanh toán
 
-1. **Tạo đơn.** Checkout gửi ID món, ID size, danh sách topping và số lượng. API đọc menu, kiểm tra khả dụng, dùng size mặc định khi không chỉ định, rồi tính `đơn giá = giá gốc + chênh lệch size + giá topping`. Trong một transaction, API tính ưu đãi và điểm nếu có, trừ tồn món, lưu đơn `PENDING` và snapshot, ghi lịch sử và trừ nguyên liệu theo công thức. Lỗi ở bất kỳ bước nào làm rollback toàn bộ transaction.
+1. **Tạo đơn.** Checkout gửi món, size, topping và số lượng. API tính giá và ưu đãi, lưu snapshot và ghi lịch sử đơn PENDING. Kho được kiểm tra khi khách thanh toán.
 2. **Áp dụng ưu đãi.** API chuẩn hóa mã giảm giá, kiểm tra kích hoạt và mức đơn tối thiểu, rồi áp trần giảm nếu có. Điểm dùng sau coupon theo tỷ lệ `1 điểm = 1.000 VND` và bị giới hạn theo số dư cùng số tiền còn lại. Đơn thanh toán thành công tích `floor(tổng thanh toán / 10.000)` điểm. Đơn hủy đủ điều kiện hoàn lại điểm đã dùng.
-3. **Thanh toán mock.** Chế độ mặc định hỗ trợ `EWALLET` và `CARD` với kết quả mô phỏng. Thành công chuyển đơn sang `PAID`, ghi thanh toán và cộng điểm. Thất bại chuyển sang `PAYMENT_FAILED`, hoàn tồn món và hoàn nguyên liệu đã trừ. Điểm đã đổi gắn với đơn trong thời gian chờ thử lại. Checkout giữ giỏ khi thanh toán lỗi.
-4. **Thanh toán VNPay.** API tạo bản ghi `PENDING`, sinh `vnp_TxnRef` riêng cho lần thử và trả URL ký HMAC-SHA512, có hạn 15 phút. Sau khi redirect, Return URL kiểm tra chữ ký, mã terminal, mã giao dịch và số tiền để điều hướng trình duyệt về web. IPN hợp lệ mới cập nhật đơn và thanh toán. API dùng số tiền từ DB, quy đổi sang đơn vị VNPay nhân 100 và khóa giao dịch trước khi ghi kết quả. Callback lặp nhận mã đã xác nhận. Trang kết quả lấy trạng thái trực tiếp từ API BrewLite.
-5. **Thử lại và hủy.** Khi retry sau `PAYMENT_FAILED`, API xác thực lại lựa chọn, giữ tồn món theo snapshot và tính nhu cầu nguyên liệu theo công thức hiện hành. Hủy hợp lệ từ `PENDING` hoàn tồn, hoàn nguyên liệu và điểm trong một transaction. Một lần thử VNPay còn `PENDING` chặn hủy và API tái sử dụng lần thử đó. Khi URL hết hạn, API bỏ URL khỏi phản hồi và vẫn chờ kết quả IPN.
+3. **Thanh toán mock.** API kiểm tra công thức và trừ đủ nguyên liệu trước khi mô phỏng giao dịch EWALLET hoặc CARD. Thành công chuyển đơn sang PAID và cộng điểm. Thất bại chuyển đơn sang PAYMENT_FAILED và hoàn nguyên liệu của lần thanh toán. Checkout giữ giỏ và hiển thị lỗi khi thiếu công thức, thiếu nguyên liệu hoặc thanh toán thất bại.
+4. **Thanh toán VNPay.** API kiểm tra và trừ nguyên liệu khi tạo giao dịch PENDING, sau đó trả URL ký HMAC-SHA512 có hạn 15 phút. Return URL xác minh dữ liệu để điều hướng trình duyệt về web. IPN hợp lệ mới chốt kết quả. IPN thành công giữ lượng đã trừ, IPN thất bại hoàn nguyên liệu của lần thanh toán, còn IPN lặp nhận mã đã xác nhận.
+5. **Thử lại và hủy.** Lần thử mới kiểm tra lại lựa chọn, công thức và số dư nguyên liệu. Chủ đơn hủy PENDING được hoàn điểm đã dùng. VNPay PENDING còn hạn chặn hủy. Khi quá hạn, API có thể hủy, đánh dấu payment FAILED và hoàn nguyên liệu theo paymentId trong cùng transaction. IPN thành công đến sau hủy được đánh dấu cần đối soát hoàn tiền.
 6. **Pha chế và bàn giao.** Nhân viên chuyển `PAID` → `PREPARING` → `READY` → `COMPLETED`. Chủ đơn đọc tiến độ qua API. Các bước chuyển trái với sơ đồ trả lỗi `409`.
 
 ```mermaid
@@ -110,7 +110,7 @@ stateDiagram-v2
     CANCELLED --> [*]
 ```
 
-Khóa idempotency áp dụng ở `POST /payments`. API tra khóa theo người dùng để phát lại phản hồi cho cùng yêu cầu, hoặc trả `409` nếu khóa gắn với một đơn, phương thức hay kết quả mô phỏng khác. Ở trang checkout, ID đơn đang thực hiện và khóa thanh toán nằm trong bộ nhớ của màn hình. Tải lại trang sẽ mất phần trạng thái đó. Tạo đơn là một request riêng với thanh toán và hiện chưa có khóa idempotency riêng. Xem [`orders.ts`](../../apps/api/src/orders.ts), [`order-state.ts`](../../apps/api/src/order-state.ts), [`payments.ts`](../../apps/api/src/payments.ts), [`vnpay.ts`](../../apps/api/src/vnpay.ts) và [sơ đồ trình tự checkout](../diagrams/sequence-checkout.puml).
+Khóa idempotency áp dụng ở `POST /payments`. API tra khóa theo người dùng để phát lại phản hồi cho cùng yêu cầu, hoặc trả `409` nếu khóa gắn với một đơn, phương thức hay kết quả mô phỏng khác. Checkout gắn giỏ với ID đơn và lưu lần thử theo người dùng trong sessionStorage để gửi lại cùng key sau khi tải lại. Đổi payload dùng key mới. VNPay PENDING với key khác trả 409. Tạo đơn là một request riêng với thanh toán và hiện chưa có khóa idempotency riêng. Xem [`orders.service.ts`](../../apps/api/src/orders/orders.service.ts), [`order-state.ts`](../../apps/api/src/orders/order-state.ts), [`payments.service.ts`](../../apps/api/src/payments/payments.service.ts), [dịch vụ callback VNPay](../../apps/api/src/payments/vnpay-callback.service.ts), [VNPay provider](../../apps/api/src/payments/providers/vnpay.provider.ts) và [sơ đồ trình tự checkout](../diagrams/sequence-checkout.puml).
 
 ## 6. Khởi chạy và cấu hình
 
@@ -131,7 +131,7 @@ npm run db:setup
 
 Chạy `npm run dev:api` và `npm run dev:web` ở hai terminal. Cổng host mặc định là web `3002`, API `3003` và PostgreSQL `5433`. `GET http://localhost:3003/health` kiểm tra API và DB. Có thể cấp quyền cho tài khoản đã đăng ký qua `npm run user:staff -- email@example.com` hoặc `npm run user:admin --workspace=api -- email@example.com` sau khi build API.
 
-[`db:setup`](../../apps/api/package.json) chạy `migrate.cjs` rồi `seed.cjs`. Với DB UUID cũ phù hợp, script ghi nhận baseline Prisma trước khi chạy `prisma migrate deploy`. DB mới được áp migration baseline và migration mở rộng. Seed thêm dữ liệu mẫu theo ID hoặc mã ổn định và giữ các giá trị đã có. `apps/api/db`, `apps/api/prisma/migrations-legacy` và `apps/api/legacy-prisma-v1` chứa schema hoặc mã lịch sử. Đường dẫn migration hiện hành được khai báo trong [`prisma.config.ts`](../../apps/api/prisma.config.ts).
+[`db:setup`](../../apps/api/package.json) chạy `migrate.cjs` rồi `seed.cjs`. Với DB UUID cũ phù hợp, script ghi nhận baseline Prisma trước khi chạy `prisma migrate deploy`. DB mới được áp migration baseline và migration mở rộng. Seed thêm danh mục, công thức size/topping và số dư nguyên liệu demo. Chạy lại giữ công thức đã cấu hình và số dư hiện có. `apps/api/db`, `apps/api/prisma/migrations-legacy` và `apps/api/legacy-prisma-v1` chứa schema hoặc mã lịch sử. Đường dẫn migration hiện hành được khai báo trong [`prisma.config.ts`](../../apps/api/prisma.config.ts).
 
 ### Docker và biến môi trường
 
@@ -139,23 +139,21 @@ Chạy `npm run dev:api` và `npm run dev:web` ở hai terminal. Cổng host m�
 - `DATABASE_URL` là kết nối API và Prisma CLI. `JWT_SECRET` cần ít nhất 32 byte và `JWT_EXPIRES_IN` mặc định là `1d`. `WEB_PORT`, `API_PORT`, `POSTGRES_PORT` và `API_INTERNAL_URL` cấu hình địa chỉ phía ứng dụng.
 - `PAYMENT_MODE` chọn `mock` hoặc `vnpay` ở API. Khi chạy web trực tiếp ngoài Docker với VNPay, đặt thêm `NEXT_PUBLIC_PAYMENT_MODE=vnpay` trước khi start dev hoặc build. Compose truyền biến này vào build web từ `PAYMENT_MODE`. API ở `NODE_ENV=production` chỉ cho phép mock khi `ALLOW_MOCK_PAYMENTS=true`.
 - VNPay cần `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET` và `VNPAY_RETURN_URL`. `VNPAY_PAYMENT_URL` phải trỏ cổng Sandbox. `VNPAY_FRONTEND_URL` là đích redirect về web. Địa chỉ IPN phải được đăng ký với VNPay và truy cập từ bên ngoài. `VNPAY_IPN_URL` trong cấu hình mẫu ghi lại địa chỉ đó, việc đăng ký diễn ra ngoài ứng dụng.
-- Một điểm cần xử lý khi build sạch image API là `prisma generate` nạp `prisma.config.ts`, trong đó `env('DATABASE_URL')` yêu cầu biến ngay lúc build. Compose cấp biến ở runtime, còn Dockerfile hiện chưa cấp cho builder. Workflow CI dùng URL placeholder cho bước generate. Phát hiện này dựa trên cấu hình trong repo, chưa được kiểm chứng bằng một lần build image sạch.
+- Dockerfile API cấp DATABASE_URL mẫu cho quá trình generate và build. Compose cấp kết nối PostgreSQL thực khi container khởi động.
 
 ## 7. Kiểm thử và giới hạn hiện tại
 
 | Kiểm tra | Phạm vi |
 | --- | --- |
 | `npm run lint` | Oxlint cho API và ESLint cho web. |
-| `npm test` | Jest unit cho API, gồm health và tổng hợp định lượng. Script test web hiện chỉ in thông báo và thoát thành công. |
+| `npm test` | Jest unit cho API, gồm health và tổng hợp định lượng. Workspace web chạy Playwright checkout với PostgreSQL đã seed và hai ứng dụng đang chạy. |
 | `npm run test:e2e --workspace=api` | Supertest kiểm tra route gốc qua NestJS với `PrismaService` thay thế bằng mock. |
 | `npm run test:integration` | Chạy trên bản build API với PostgreSQL thật qua `TEST_DATABASE_URL` hoặc `DATABASE_URL` từ môi trường hay `.env` gốc. Suite tạo schema riêng, áp migration và fixture, kiểm tra API, giao dịch, tồn, coupon, điểm và VNPay mô phỏng, rồi xóa schema kiểm thử. |
 | `npm run build` | Generate Prisma Client và build NestJS, sau đó build Next.js. |
 
-[GitHub Actions](../../.github/workflows/ci.yml) kích hoạt khi push hoặc mở pull request vào `main`, chạy `npm ci` → generate Prisma Client → lint → test → build. Integration và e2e có lệnh riêng ngoài pipeline này.
+[GitHub Actions](../../.github/workflows/ci.yml) chạy Quality và Browser E2E. Push main hoặc tag v* vượt qua hai check sẽ xuất image theo SHA lên GHCR. Tag v* triển khai qua SSH vào Lightsail VM và kiểm tra HTTPS health.
 
 - Web tập trung vào hành trình khách hàng. Coupon, đổi điểm, cập nhật tiến độ pha chế và kho đã có nghiệp vụ ở backend, trong khi checkout web hiện chỉ gửi dòng hàng và web chưa có màn hình vận hành tương ứng.
 - Web có manifest PWA, còn repository chưa có service worker hoặc luồng đặt hàng offline. Tiến độ đơn đi qua REST và cơ chế hỏi lại ở trang kết quả. Tích hợp VNPay hiện chạy với Sandbox. Chưa có tác vụ nền đối soát hoặc đóng giao dịch VNPay `PENDING` đã hết hạn.
-- Retry với món có công thức cần kiểm thử thêm. Khi retry, `consume()` ghi `CONSUMPTION` mới cho cùng đơn, trong khi bảng `inventory_movements` chỉ cho phép một bản ghi mỗi `(order_id, ingredient_id, type)`. Với nguyên liệu đã có biến động ở lần trước, thao tác có thể gặp ràng buộc duy nhất và rollback. Xem [dịch vụ kho](../../apps/api/src/inventory/inventory.service.ts) và [migration mở rộng](../../apps/api/prisma/migrations/20261115001000_api_features/migration.sql).
-- Với thanh toán mock, API lưu `SUCCESS` khi request bỏ qua `mockOutcome`. Khi phát lại cùng request, phép so sánh dùng `null` cho trường vắng mặt, vì vậy client có thể nhận `409` dù gửi lại cùng nội dung. Checkout web luôn gửi `mockOutcome` trong chế độ mock. Xem [dịch vụ thanh toán](../../apps/api/src/payments.ts) và [trang checkout](../../apps/web/src/app/checkout/page.tsx).
 
 Xem thêm [đặc tả yêu cầu](../requirements/srs.md), [ma trận truy vết](../traceability-matrix.md) và [danh mục ADR](adr/README.md).

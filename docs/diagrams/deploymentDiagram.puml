@@ -8,11 +8,11 @@ actor "Người dùng" as Customer
 artifact "Trình duyệt" as Browser
 cloud "VNPay Sandbox" as Gateway
 node "Local\nCompose web/API/PostgreSQL" as Local
-node "CI — GitHub Actions\nInstall, generate, lint, test, build" as CI
-artifact "Container registry\nHạng mục CD theo đề bài nếu cần" as Registry
+node "CI — GitHub Actions\nQuality + Browser E2E" as CI
+artifact "GHCR\nWeb/API image gắn commit SHA" as Registry
 
 node "AWS Lightsail — ap-southeast-2\nUbuntu 24.04 LTS" as Host {
-  artifact "Images hiện có\nbrewlite-web và brewlite-api" as Images
+  artifact "Images web/API\nrelease.compose.yaml theo SHA" as Images
   artifact "Cấu hình máy chủ\nEnv và secret runtime" as Env
   node "Docker Compose — brewlite-server" as Compose {
     component "caddy\nHTTP :80 và HTTPS :443" as Caddy
@@ -36,10 +36,12 @@ API --> DB : postgres:5432
 DB -- Data
 Caddy -- CaddyData
 Env ..> API : Biến môi trường
-Images ..> Compose : Image tag đã cài
-Local ..> CI : Push hoặc PR
-CI ..> Registry : Pipeline CD cần bổ sung
-Registry ..> Images : Luồng release dự kiến nếu dùng registry
+Images ..> Compose : Triển khai hai image theo SHA
+Local ..> CI : PR, push main hoặc tag v*
+CI --> Registry : Build và push image sau hai check
+CI --> Host : Tag v* triển khai qua SSH
+CI --> Caddy : HTTPS /api/backend/health sau deploy
+Registry --> Images : VM pull web/API theo SHA
 
 note bottom of Compose
   Web, API và DB dùng mạng nội bộ Compose.

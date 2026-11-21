@@ -53,9 +53,11 @@ Chờ PostgreSQL sẵn sàng trước khi chạy `db:setup`. Bước build tạo
 
 `db:setup` gọi migration rồi seed. DB mới nhận baseline và migration tính năng. Script nhận diện một số schema UUID cũ để ghi nhận baseline trước khi deploy migration. Seed giữ lại giá trị đã có. Sau khi đăng ký tài khoản và build API, có thể cấp quyền bằng `npm run user:staff -- email@example.com` hoặc `npm run user:admin --workspace=api -- email@example.com`. Xem [script migration](../apps/api/scripts/migrate.cjs) và [script seed](../apps/api/scripts/seed.cjs).
 
+Khi nâng cấp schema tồn theo nguyên liệu, dừng API phiên bản cũ, chạy migration rồi mới khởi động bản mới. Migration giữ nguyên lượng đã trừ cho các phiên VNPay đang chờ và hoàn lượng đã giữ của đơn chưa bắt đầu thanh toán. Trước khi mở bán, quản trị viên cần cấu hình công thức cho từng size và topping được bán rồi nhập tồn nguyên liệu. Seed ứng dụng tạo danh mục, 12 công thức theo size, 3 công thức topping và tồn dương dành cho demo trên DB mới. Seed giữ nguyên số dư hiện có và công thức đã cấu hình. Suite integration PostgreSQL dùng fixture riêng. Xem [migration tồn theo lần thanh toán](../apps/api/prisma/migrations/20261121000000_payment_ingredient_inventory/migration.sql).
+
 ## Build container và cấu hình thanh toán
 
-- [Dockerfile API](../apps/api/Dockerfile) gọi build:api, trong đó Prisma generate nạp [prisma.config.ts](../apps/api/prisma.config.ts). Biến DATABASE_URL đang được Compose cấp ở runtime, còn builder chưa khai báo biến này. Cấu hình CI cấp URL placeholder cho Prisma CLI. Cần cung cấp biến ở build stage để build sạch API theo cấu hình hiện tại. Nhận định này dựa trên cấu hình trong repo.
+- [Dockerfile API](../apps/api/Dockerfile) cấp DATABASE_URL mẫu trong bước generate/build. Khi container chạy, Compose cấp URL PostgreSQL của môi trường.
 - [Dockerfile web](../apps/web/Dockerfile) tạo bản Next.js standalone. Compose chuyển PAYMENT_MODE vào build web qua NEXT_PUBLIC_PAYMENT_MODE. Khi chạy web trực tiếp với Sandbox, đặt NEXT_PUBLIC_PAYMENT_MODE=vnpay trước khi chạy hoặc build.
 - API mặc định dùng PAYMENT_MODE=mock. JWT_SECRET cần ít nhất 32 byte, JWT_EXPIRES_IN mặc định là 1d. API ở NODE_ENV=production yêu cầu ALLOW_MOCK_PAYMENTS=true nếu dùng mock.
 - Để dùng Sandbox, đặt PAYMENT_MODE=vnpay, VNPAY_TMN_CODE, VNPAY_HASH_SECRET, VNPAY_RETURN_URL và VNPAY_FRONTEND_URL. VNPAY_PAYMENT_URL phải là endpoint Sandbox. Giữ secret ở API. Return URL cần truy cập được từ trình duyệt. Đăng ký URL IPN truy cập được từ VNPay, trỏ đến /payments/vnpay/ipn. VNPAY_IPN_URL ghi địa chỉ đã đăng ký, việc đăng ký thực hiện bên ngoài ứng dụng.
@@ -65,10 +67,32 @@ Chờ PostgreSQL sẵn sàng trước khi chạy `db:setup`. Bước build tạo
 - docker compose config --quiet kiểm tra cấu hình Compose.
 - npm run test:integration cần build API và kết nối PostgreSQL qua TEST_DATABASE_URL hoặc DATABASE_URL. Suite tạo schema kiểm thử riêng rồi dọn sau khi chạy.
 - [Smoke test](../apps/api/scripts/smoke-commerce.cjs) tạo tài khoản và đơn thật trong DB mà API đang dùng. Chạy với môi trường thử nghiệm, PAYMENT_MODE=mock và API_URL=http://localhost:3003 nếu dùng cổng host mặc định.
-- [CI](../.github/workflows/ci.yml) chạy khi push hoặc mở PR vào `main`, với install, generate, lint, test và build. Repository chưa có job cập nhật stack Lightsail hoặc bằng chứng diễn tập rollback.
+- [Quality và Browser E2E](../.github/workflows/ci.yml) là hai check cho PR vào main. Mỗi job dùng một PostgreSQL riêng. Browser E2E khởi động web và API thật ở chế độ mock, tạo tài khoản thử và kiểm tra mã đơn trên giao diện.
+- Để chạy lại [test checkout](../apps/web/e2e/checkout.spec.ts) ở local, dùng DB dành cho test với DATABASE_URL và JWT_SECRET theo cấu hình local. Đặt PAYMENT_MODE và NEXT_PUBLIC_PAYMENT_MODE thành mock, API_INTERNAL_URL thành http://127.0.0.1:3003 trước khi build. Để trống cổng web/API cho Playwright khởi động hai dịch vụ.
 
-## Phát hành và rollback theo Assignment 2
+~~~bash
+npm ci
+npx playwright install chromium
+npm run build
+npm run db:setup
+npm run test:web
+~~~
 
-Task 5.3 yêu cầu pipeline chạy từ push/tag qua kiểm tra lint, test và build, sau đó tạo image có tag commit SHA hoặc version. Pipeline ghi đích phân phối image, dùng registry nếu môi trường cần, chạy migration có kiểm soát, cập nhật dịch vụ và kiểm tra trang web cùng API health sau deploy. Thất bại ở một bước dừng luồng phát hành. Đây là tiêu chí cần nghiệm thu của S2-K01 và S2-K02 trong [backlog](backlog.md).
+## Phát hành và kiểm tra health
+
+Push lên main hoặc tag v* chạy hai check trước khi build và push hai image lên GHCR với tag là toàn bộ commit SHA. Chỉ tag v* kích hoạt deploy vào GitHub environment production. Web release dùng VNPay Sandbox tương ứng với cấu hình Lightsail.
+
+Environment production cần ba GitHub Actions secrets: DEPLOY_TARGET (user@host), DEPLOY_SSH_KEY (private key của tài khoản triển khai) và DEPLOY_KNOWN_HOSTS (host key SSH đã xác minh). Tài khoản triển khai cần quyền chạy Docker Compose v2 có hỗ trợ --wait, ghi vào /opt/brewlite và pull hai image GHCR. Với package private, cấu hình quyền đọc registry trên máy chủ.
+
+Job deploy dùng project brewlite-server, giữ cấu hình dịch vụ trong compose.yaml và ghi đè hai tên image theo SHA. Sau khi Compose sẵn sàng và ID image của cả hai container khớp, workflow lưu release.compose.yaml cạnh compose.yaml. Khi thao tác thủ công với release này, dùng cả hai file:
+
+~~~bash
+cd /opt/brewlite
+docker compose -p brewlite-server -f compose.yaml -f release.compose.yaml ps
+~~~
+
+Cuối job, runner gọi endpoint HTTPS công khai qua web và yêu cầu cả status và database bằng ok. Lỗi SSH, pull, khởi động, kiểm tra image hoặc health làm job thất bại.
+
+## Rollback
 
 Khi chuẩn bị phát hành, lưu cặp image web/API đang chạy, cấu hình tương ứng và điểm khôi phục dữ liệu nếu thay đổi schema. Khi deploy thất bại, xác định migration đã chạy tới đâu và khả năng tương thích của image trước với schema hiện tại. Nếu tương thích, dùng lại cặp image và cấu hình đã lưu rồi kiểm tra container, HTTPS và health. Nếu không tương thích, dùng phương án phục hồi dữ liệu đã kiểm chứng cho migration đó. Lưu thời điểm, phiên bản, kết quả smoke và lỗi đã xử lý vào minh chứng release. Quy trình này cần được diễn tập trên môi trường kiểm thử trước khi ghi là đã xác minh.

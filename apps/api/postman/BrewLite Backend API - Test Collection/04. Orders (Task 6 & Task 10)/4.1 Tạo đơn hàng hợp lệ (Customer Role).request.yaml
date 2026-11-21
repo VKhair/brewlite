@@ -9,13 +9,10 @@ body:
     {
       "items": [
         {
-          "productId": 1,
-          "size": "M",
-          "toppings": ["pearl", "cheese"],
+          "productId": "10000000-0000-4000-8000-000000000001",
           "quantity": 1
         }
-      ],
-      "couponCode": "BREWLITE10"
+      ]
     }
 auth:
   type: bearer
@@ -30,9 +27,9 @@ scripts:
       pm.test('Đơn được tạo trạng thái PENDING và lưu orderId, orderCode', function () {
           const res = pm.response.json();
           pm.expect(res.status).to.eql('PENDING');
-          pm.expect(res).to.have.property('id');
+          pm.expect(res).to.have.property('orderId');
           pm.expect(res).to.have.property('orderCode');
-          pm.environment.set('orderId', res.id);
+          pm.environment.set('orderId', res.orderId);
           pm.environment.set('orderCode', res.orderCode);
           pm.expect(res.items.length).to.eql(1);
       });

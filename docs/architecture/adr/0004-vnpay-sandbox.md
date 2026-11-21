@@ -8,4 +8,4 @@ Provider VNPay ký URL từ số tiền trong đơn, mã lần thử và Return 
 
 Khóa idempotency theo người dùng áp dụng cho POST /payments. API dùng lại lần thử VNPay đang PENDING. Hết hạn URL không tự kết thúc lần thử. Nếu phát lại một yêu cầu mock đã bỏ trường mockOutcome, giá trị mặc định khi ghi và giá trị khi đối chiếu hiện khác nhau.
 
-Xem [factory](../../../apps/api/src/payment-provider.ts), [VNPay provider](../../../apps/api/src/vnpay.ts), [dịch vụ thanh toán](../../../apps/api/src/payments.ts) và [cấu hình](../../deployment.md).
+Xem [factory](../../../apps/api/src/payments/providers/payment-provider.factory.ts), [VNPay provider](../../../apps/api/src/payments/providers/vnpay.provider.ts), [dịch vụ thanh toán](../../../apps/api/src/payments/payments.service.ts), [dịch vụ callback](../../../apps/api/src/payments/vnpay-callback.service.ts) và [cấu hình](../../deployment.md).

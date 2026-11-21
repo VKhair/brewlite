@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MenuProducts } from "../components/ui";
+import { MenuProducts } from "@/features/products/menu-products";
 export default function Home() {
   return (
     <>

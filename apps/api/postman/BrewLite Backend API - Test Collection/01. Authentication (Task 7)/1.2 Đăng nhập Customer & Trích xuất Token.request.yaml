@@ -16,11 +16,10 @@ scripts:
       pm.test('Status code là 200 OK', function () {
           pm.response.to.have.status(200);
       });
-      pm.test('Trả về accessToken và gán customerToken vào Environment', function () {
+      pm.test('Trả về access_token và gán customerToken vào Environment', function () {
           const res = pm.response.json();
-          pm.expect(res.success).to.be.true;
-          pm.expect(res).to.have.property('accessToken');
-          pm.environment.set('customerToken', res.accessToken);
+          pm.expect(res).to.have.property('access_token');
+          pm.environment.set('customerToken', res.access_token);
           pm.expect(res.user.role).to.eql('CUSTOMER');
       });
     language: text/javascript

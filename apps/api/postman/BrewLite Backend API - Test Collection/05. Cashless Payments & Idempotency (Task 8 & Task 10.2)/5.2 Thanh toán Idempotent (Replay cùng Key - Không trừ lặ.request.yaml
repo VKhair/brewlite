@@ -9,10 +9,9 @@ body:
   type: text
   content: |-
     {
-      "orderId": {{orderId}},
-      "method": "EWALLET",
-      "simulateSuccess": true,
-      "idempotencyKey": "{{idempotencyKey}}"
+      "orderId": "{{orderId}}",
+      "paymentMethod": "EWALLET",
+      "mockOutcome": "SUCCESS"
     }
 auth:
   type: bearer
@@ -21,14 +20,14 @@ auth:
 scripts:
   - type: afterResponse
     code: |-
-      pm.test('Status code là 200 hoặc 201', function () {
-          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      pm.test('HTTP 200', function () {
+          pm.response.to.have.status(200);
       });
-      pm.test('Gửi lặp cùng Key trả về kết quả cũ: idempotent: true', function () {
+      pm.test('Kiểm tra dữ liệu phản hồi', function () {
           const res = pm.response.json();
-          pm.expect(res.idempotent).to.be.true;
-          pm.expect(res.payment.status).to.eql('SUCCESS');
-          pm.expect(res.order.status).to.eql('PAID');
+          pm.expect(res.paymentStatus).to.eql('SUCCESS');
+          pm.expect(res.status).to.eql('PAID');
+          pm.expect(res.paymentId).to.eql(pm.environment.get('paymentId'));
       });
     language: text/javascript
 order: 2000

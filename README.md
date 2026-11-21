@@ -118,14 +118,14 @@ npm run lint
 *Chạy riêng:* `npm run lint:api` hoặc `npm run lint:web`.
 
 ### 4.2. Kiểm thử tự động (Testing)
-Chạy bộ kiểm thử Unit Test cho toàn bộ workspace:
+Sau khi build, seed PostgreSQL kiểm thử và cài Chromium theo [hướng dẫn Playwright](docs/deployment.md#kiểm-tra-và-tự-động-hóa), chạy unit API và E2E trình duyệt:
 ```bash
 npm test
 ```
 *Chạy riêng:* `npm run test:api` hoặc `npm run test:web`.
 
 ### 4.3. Kiểm thử tích hợp (Integration Tests)
-Chạy bộ kiểm thử tích hợp API với cơ sở dữ liệu in-memory PGlite:
+Sau khi build API, đặt TEST_DATABASE_URL hoặc DATABASE_URL trỏ tới PostgreSQL kiểm thử rồi chạy:
 ```bash
 npm run test:integration
 ```
@@ -143,27 +143,29 @@ npm run build
 
 Theo thiết kế kiến trúc tại [`docs/deployment.md`](docs/deployment.md) và [`docs/architecture/adr/0005-aws-lightsail.md`](docs/architecture/adr/0005-aws-lightsail.md):
 
-### 5.1. Mô hình triển khai Production (AWS Lightsail)
-- **Frontend Container Service:** Chạy Next.js Web App, mở cổng HTTPS công khai đón người dùng và hỗ trợ PWA.
-- **Backend API Container Service:** Chạy NestJS API, mở HTTPS nhận API request từ Web và webhook thanh toán.
-- **Managed PostgreSQL Database:** Vận hành ở chế độ **Private Mode**, chỉ cho phép kết nối nội bộ từ Backend API trong cùng AWS Region; tuyệt đối không mở cổng công khai ra Internet.
+### 5.1. Môi trường production
 
-### 5.2. Pipeline Tự động hóa CI/CD
-1. **Pull Request Quality Gate:** Mỗi PR vào nhánh `main` phải vượt qua pipeline GitHub Actions (`Install` $\rightarrow$ `Lint` $\rightarrow$ `Test` $\rightarrow$ `Build`).
-2. **Đóng gói & Triển khai:** Khi tag phiên bản mới hoặc push vào `main`, pipeline đóng gói Docker Image gắn tag Git Commit SHA và triển khai lên AWS Lightsail.
-3. **Kiểm tra sau triển khai (Smoke Test):** Gọi tự động endpoint `GET /health` để xác minh trạng thái sẵn sàng của dịch vụ và kết nối database.
+Caddy trên Lightsail VM nhận HTTPS và chuyển tiếp đến web/API. PostgreSQL dùng volume và mạng nội bộ của Compose.
 
-### 5.3. Quy trình Rollback sự cố (< 5 phút)
-Khi phát hiện lỗi nghiêm trọng sau khi triển khai phiên bản mới:
-1. Truy cập AWS Lightsail Console hoặc dùng AWS CLI chuyển active deployment về bản snapshot/image tag SHA ổn định trước đó:
-   ```bash
-   aws lightsail create-container-service-deployment \
-     --service-name brewlite-api \
-     --containers file://deployments/rollback-containers.json \
-     --public-endpoint file://deployments/rollback-endpoint.json
-   ```
-2. Thực hiện rollback database migration (nếu có thay đổi schema) về phiên bản tương thích.
-3. Kiểm tra lại endpoint `GET /health` để đảm bảo hệ thống đã phục hồi trạng thái hoạt động bình thường trong thời gian dưới 5 phút theo chỉ tiêu **NFR-12**.
+### 5.2. Kiểm tra và phát hành
+
+PR vào main chạy hai check bắt buộc `Quality` và `Browser E2E`. Push lên main hoặc tag v* vượt qua hai check sẽ đóng gói web/API và đẩy image gắn commit SHA lên GHCR. Tag v* triển khai hai image lên Lightsail và kiểm tra readiness tại `/api/backend/health`. Xem [cấu hình môi trường production và vận hành release](docs/deployment.md#phát-hành-và-kiểm-tra-health).
+
+### 5.3. Phục hồi
+
+Trước khi phát hành, lưu bản sao overlay `/opt/brewlite/release.compose.yaml` của release ổn định, SHA cặp image API/web và điểm khôi phục PostgreSQL nếu có migration. Tag `v1.0.0` hoặc tag `v*` tương ứng trỏ tới commit cần phát hành.
+
+Nếu cần quay lui và cặp image cũ tương thích với schema hiện tại, trên Lightsail VM chạy:
+
+```bash
+cd /opt/brewlite
+cp /duong-dan/ban-sao/release.compose.yaml release.compose.yaml
+docker compose -p brewlite-server -f compose.yaml -f release.compose.yaml pull api web
+docker compose -p brewlite-server -f compose.yaml -f release.compose.yaml up -d --no-build --wait api web
+curl --fail --silent --show-error https://brewlite.vkhair.dev/api/backend/health | jq -e '.status == "ok" and .database == "ok"'
+```
+
+Nếu schema đã thay đổi theo cách không tương thích, dùng phương án phục hồi PostgreSQL đã kiểm chứng cho migration đó trước khi khởi động cặp image cũ. [Chi tiết vận hành](docs/deployment.md#rollback)
 
 ---
 

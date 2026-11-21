@@ -1,5 +1,5 @@
 $kind: http-request
-url: "{{baseUrl}}/orders/code/{{orderCode}}"
+url: "{{baseUrl}}/orders/{{orderId}}"
 method: GET
 auth:
   type: bearer
@@ -13,6 +13,7 @@ scripts:
       });
       pm.test('Trả về đúng đơn hàng theo orderCode', function () {
           const res = pm.response.json();
+          pm.expect(res.orderId).to.eql(pm.environment.get('orderId'));
           pm.expect(res.orderCode).to.eql(pm.environment.get('orderCode'));
           pm.expect(res.status).to.eql('PENDING');
       });

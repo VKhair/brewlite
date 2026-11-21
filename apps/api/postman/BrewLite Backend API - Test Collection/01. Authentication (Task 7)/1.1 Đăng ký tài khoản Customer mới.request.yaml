@@ -9,7 +9,7 @@ body:
     {
       "email": "{{customerEmail}}",
       "password": "{{customerPassword}}",
-      "name": "Khách Hàng Test Postman"
+      "fullName": "Khách Hàng Test Postman"
     }
 scripts:
   - type: beforeRequest
@@ -19,14 +19,13 @@ scripts:
     language: text/javascript
   - type: afterResponse
     code: |-
-      pm.test('Status code là 200 hoặc 201 (Created)', function () {
-          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      pm.test('HTTP 201', function () {
+          pm.response.to.have.status(201);
       });
-      pm.test('Đăng ký thành công và trả về thông tin user', function () {
+      pm.test('Tài khoản mới', function () {
           const res = pm.response.json();
-          pm.expect(res.success).to.be.true;
-          pm.expect(res.data).to.have.property('id');
-          pm.expect(res.data.email).to.eql(pm.environment.get('customerEmail'));
+          pm.expect(res.user.email).to.eql(pm.environment.get('customerEmail'));
+          pm.expect(res.user.role).to.eql('CUSTOMER');
       });
     language: text/javascript
 order: 1000

@@ -1,0 +1,495 @@
+{
+  "info": {
+    "name": "BrewLite Server – Checkout",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Chạy thư mục Checkout với 1 iteration. Chế độ cancel hủy đơn. Chế độ vnpay khởi tạo một giao dịch Sandbox. Sau khi hoàn tất Sandbox, chạy riêng thư mục Xác nhận thanh toán."
+  },
+  "item": [
+    {
+      "name": "Checkout",
+      "item": [
+        {
+          "name": "01 Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('API và cơ sở dữ liệu sẵn sàng', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data.status).to.equal('ok');",
+                  "    pm.expect(data.database).to.equal('ok');",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "02 Menu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('Menu có món đang bán', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data).to.be.an('array');",
+                  "    const available = data.filter((product) => product.isAvailable === true);",
+                  "    pm.expect(available).to.not.be.empty;",
+                  "    pm.expect(available.some((product) => product.id === pm.environment.get('testProductId'))).to.equal(true);",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/products"
+          }
+        },
+        {
+          "name": "03 Chọn món và kích cỡ mặc định",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('Chi tiết có kích cỡ mặc định và giá hợp lệ', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data.id).to.equal(pm.environment.get('testProductId'));",
+                  "    pm.expect(data.isAvailable).to.equal(true);",
+                  "    const sizes = data.sizes.filter((size) => size.isDefault);",
+                  "    pm.expect(sizes).to.have.lengthOf(1);",
+                  "    pm.expect(Number.isSafeInteger(data.basePrice + sizes[0].priceDelta)).to.equal(true);",
+                  "    pm.expect(data.basePrice + sizes[0].priceDelta).to.be.greaterThan(0);",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  } else {",
+                  "    const size = data.sizes.find((size) => size.isDefault);",
+                  "    pm.environment.set('sizeId', size.id);",
+                  "    pm.environment.set('expectedTotal', String(data.basePrice + size.priceDelta));",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/products/{{testProductId}}"
+          }
+        },
+        {
+          "name": "04 Đăng ký",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const key of ['customerToken', 'customerId', 'orderId', 'orderCode', 'paymentId', 'checkoutUrl', 'idempotencyKey']) {",
+                  "  pm.environment.unset(key);",
+                  "}",
+                  "const mode = pm.environment.get('checkoutMode');",
+                  "const guid = pm.variables.replaceIn('{{$guid}}');",
+                  "pm.environment.set('customerEmail', 'brewlite-qa-' + guid + '@example.com');",
+                  "pm.environment.set('customerPassword', 'BrewLite9-' + guid);",
+                  "if (!['cancel', 'vnpay'].includes(mode) || pm.info.iterationCount !== 1) {",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('Đăng ký tạo tài khoản CUSTOMER và cấp JWT', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(data.user.email).to.equal(pm.environment.get('customerEmail'));",
+                  "    pm.expect(data.user.role).to.equal('CUSTOMER');",
+                  "    pm.expect(data.user.id).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.access_token).to.be.a('string').and.not.empty;",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  } else {",
+                  "    pm.environment.set('customerId', data.user.id);",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"BrewLite QA\",\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "05 Đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('Đăng nhập cấp JWT của đúng tài khoản', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data.user.id).to.equal(pm.environment.get('customerId'));",
+                  "    pm.expect(data.token_type).to.equal('Bearer');",
+                  "    pm.expect(data.access_token).to.be.a('string').and.not.empty;",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  } else {",
+                  "    pm.environment.set('customerToken', data.access_token);",
+                  "    if (pm.environment.get('checkoutMode') === 'cancel') pm.execution.setNextRequest('07 Tạo đơn');",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "06 Đăng nhập sai",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('Sai mật khẩu bị từ chối', () => {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(data.code).to.equal('INVALID_CREDENTIALS');",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"BrewLite9-InvalidPassword\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "07 Tạo đơn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  if (pm.response.code === 201 && data?.orderId && data?.orderCode) {",
+                  "    pm.environment.set('orderId', data.orderId);",
+                  "    pm.environment.set('orderCode', data.orderCode);",
+                  "  }",
+                  "  let passed = false;",
+                  "  pm.test('Đơn PENDING có đúng khách, món, kích cỡ, số lượng và tổng tiền', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(data.userId).to.equal(pm.environment.get('customerId'));",
+                  "    pm.expect(data.status).to.equal('PENDING');",
+                  "    pm.expect(data.orderId).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.orderCode).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.items).to.have.lengthOf(1);",
+                  "    pm.expect(data.items[0]).to.include({ productId: pm.environment.get('testProductId'), sizeId: pm.environment.get('sizeId'), quantity: 1, lineTotal: Number(pm.environment.get('expectedTotal')) });",
+                  "    pm.expect(data.totalAmount).to.equal(Number(pm.environment.get('expectedTotal')));",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  } else {",
+                  "    if (pm.environment.get('checkoutMode') === 'vnpay') pm.execution.setNextRequest('09 Khởi tạo VNPay Sandbox');",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"{{testProductId}}\",\n      \"sizeId\": \"{{sizeId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "08 Hủy đơn thử",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  pm.test('Đơn thử đã được hủy', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    const order = pm.response.json();",
+                  "    pm.expect(order.orderId).to.equal(pm.environment.get('orderId'));",
+                  "    pm.expect(order.status).to.equal('CANCELLED');",
+                  "  });",
+                  "  pm.execution.setNextRequest(null);",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{orderId}}/cancel"
+          }
+        },
+        {
+          "name": "09 Khởi tạo VNPay Sandbox",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('checkoutMode') !== 'vnpay' || !pm.environment.get('orderId') || pm.environment.get('idempotencyKey')) {",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "} else {",
+                  "  pm.environment.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('VNPay trả liên kết Sandbox và trạng thái PENDING', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data.orderId).to.equal(pm.environment.get('orderId'));",
+                  "    pm.expect(data.status).to.equal('PENDING');",
+                  "    pm.expect(data.paymentStatus).to.equal('PENDING');",
+                  "    pm.expect(data.totalAmount).to.equal(Number(pm.environment.get('expectedTotal')));",
+                  "    pm.expect(data.paymentId).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.checkoutUrl).to.match(/^https:\\/\\/sandbox\\.vnpayment\\.vn\\/paymentv2\\/vpcpay\\.html\\?/);",
+                  "    passed = true;",
+                  "  });",
+                  "  if (passed) {",
+                  "    pm.environment.set('paymentId', data.paymentId);",
+                  "    pm.environment.set('checkoutUrl', data.checkoutUrl);",
+                  "  }",
+                  "  pm.execution.setNextRequest(null);",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"paymentMethod\": \"VNPAY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xác nhận thanh toán",
+      "item": [
+        {
+          "name": "10 Xác nhận IPN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let data;",
+                  "  try { data = pm.response.json(); } catch (_) {}",
+                  "  let passed = false;",
+                  "  pm.test('IPN xác nhận đơn PAID và giao dịch SUCCESS', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(data.orderId).to.equal(pm.environment.get('orderId'));",
+                  "    pm.expect(data.status).to.equal('PAID');",
+                  "    pm.expect(data.payments.some((payment) => payment.paymentId === pm.environment.get('paymentId') && payment.paymentMethod === 'VNPAY' && payment.status === 'SUCCESS')).to.equal(true);",
+                  "    pm.expect(data.history.some((entry) => entry.toStatus === 'PAID')).to.equal(true);",
+                  "    passed = true;",
+                  "  });",
+                  "  if (!passed) {",
+                  "    pm.execution.setNextRequest(null);",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{orderId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

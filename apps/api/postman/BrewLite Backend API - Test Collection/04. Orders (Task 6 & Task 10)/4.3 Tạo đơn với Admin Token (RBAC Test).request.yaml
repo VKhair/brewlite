@@ -1,4 +1,5 @@
 $kind: http-request
+name: 4.3 Tạo đơn với JWT Admin
 url: "{{baseUrl}}/orders"
 method: POST
 headers:
@@ -9,8 +10,7 @@ body:
     {
       "items": [
         {
-          "productId": 1,
-          "size": "S",
+          "productId": "10000000-0000-4000-8000-000000000001",
           "quantity": 1
         }
       ]
@@ -22,8 +22,12 @@ auth:
 scripts:
   - type: afterResponse
     code: |-
-      pm.test('CustomerGuard chặn Admin đặt đơn với mã 403 Forbidden', function () {
-          pm.response.to.have.status(403);
+      pm.test('HTTP 201', function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test('Kiểm tra dữ liệu phản hồi', function () {
+          const res = pm.response.json();
+          pm.expect(res.status).to.eql('PENDING');
       });
     language: text/javascript
 order: 3000

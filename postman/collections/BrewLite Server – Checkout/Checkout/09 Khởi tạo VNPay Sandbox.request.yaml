@@ -1,0 +1,48 @@
+$kind: http-request
+url: "{{baseUrl}}/payments"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{customerToken}}
+  Idempotency-Key: "{{idempotencyKey}}"
+body:
+  type: json
+  content: |-
+    {
+      "orderId": "{{orderId}}",
+      "paymentMethod": "VNPAY"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (pm.environment.get('checkoutMode') !== 'vnpay' || !pm.environment.get('orderId') || pm.environment.get('idempotencyKey')) {
+        pm.execution.setNextRequest(null);
+        pm.execution.skipRequest();
+      } else {
+        pm.environment.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        let passed = false;
+        pm.test('VNPay trả liên kết Sandbox và trạng thái PENDING', () => {
+          pm.response.to.have.status(200);
+          pm.expect(data.orderId).to.equal(pm.environment.get('orderId'));
+          pm.expect(data.status).to.equal('PENDING');
+          pm.expect(data.paymentStatus).to.equal('PENDING');
+          pm.expect(data.totalAmount).to.equal(Number(pm.environment.get('expectedTotal')));
+          pm.expect(data.paymentId).to.be.a('string').and.not.empty;
+          pm.expect(data.checkoutUrl).to.match(/^https:\/\/sandbox\.vnpayment\.vn\/paymentv2\/vpcpay\.html\?/);
+          passed = true;
+        });
+        if (passed) {
+          pm.environment.set('paymentId', data.paymentId);
+          pm.environment.set('checkoutUrl', data.checkoutUrl);
+        }
+        pm.execution.setNextRequest(null);
+      })();
+    language: text/javascript
+order: 9000

@@ -1,0 +1,50 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "fullName": "BrewLite QA",
+      "email": "{{customerEmail}}",
+      "password": "{{customerPassword}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      for (const key of ['customerToken', 'customerId', 'orderId', 'orderCode', 'paymentId', 'checkoutUrl', 'idempotencyKey']) {
+        pm.environment.unset(key);
+      }
+      const mode = pm.environment.get('checkoutMode');
+      const guid = pm.variables.replaceIn('{{$guid}}');
+      pm.environment.set('customerEmail', 'brewlite-qa-' + guid + '@example.com');
+      pm.environment.set('customerPassword', 'BrewLite9-' + guid);
+      if (!['cancel', 'vnpay'].includes(mode) || pm.info.iterationCount !== 1) {
+        pm.execution.setNextRequest(null);
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        let passed = false;
+        pm.test('Đăng ký tạo tài khoản CUSTOMER và cấp JWT', () => {
+          pm.response.to.have.status(201);
+          pm.expect(data.user.email).to.equal(pm.environment.get('customerEmail'));
+          pm.expect(data.user.role).to.equal('CUSTOMER');
+          pm.expect(data.user.id).to.be.a('string').and.not.empty;
+          pm.expect(data.access_token).to.be.a('string').and.not.empty;
+          passed = true;
+        });
+        if (!passed) {
+          pm.execution.setNextRequest(null);
+        } else {
+          pm.environment.set('customerId', data.user.id);
+        }
+      })();
+    language: text/javascript
+order: 4000

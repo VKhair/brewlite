@@ -1,0 +1,221 @@
+"use client";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { money } from "@/shared/format";
+import { drinkPhoto, toppingPhoto } from "./product-photos";
+import { getProduct } from "./products.api";
+import type { Product } from "./product.types";
+import { useAppStore } from "@/app/app-providers";
+import { Quantity } from "@/shared/ui/quantity";
+export default function ProductDetail() {
+  const { id } = useParams<{ id: string }>(),
+    router = useRouter(),
+    { add } = useAppStore();
+  const [product, setProduct] = useState<Product | null>(null),
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(true),
+    [sizeId, setSizeId] = useState(""),
+    [toppingIds, setToppingIds] = useState<string[]>([]),
+    [quantity, setQuantity] = useState(1);
+  useEffect(() => {
+    let alive = true;
+    getProduct(id)
+      .then((p) => {
+        if (alive) {
+          setProduct(p);
+          setSizeId(
+            p.sizes?.find((s) => s.isDefault)?.id || p.sizes?.[0]?.id || "",
+          );
+        }
+      })
+      .catch((e) => {
+        if (alive) setError(e.message);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  if (loading)
+    return (
+      <div className="container inner-page">
+        <div className="empty-state">Đang tải sản phẩm...</div>
+      </div>
+    );
+  if (error || !product)
+    return (
+      <div className="container inner-page empty-state">
+        <h2>Không tìm thấy sản phẩm</h2>
+        <p>{error}</p>
+        <Link href="/menu" className="btn">
+          Quay lại thực đơn
+        </Link>
+      </div>
+    );
+  const visibleSizes =
+    product.imageUrl?.startsWith("/images/menu-2026/") ||
+    product.imageUrl?.startsWith("/images/menu-10/")
+      ? product.category === "Cà phê" || product.name === "Trà tắc"
+        ? product.sizes?.filter((s) => s.name === "M")
+        : product.sizes?.filter((s) => s.name === "M" || s.name === "L")
+      : product.sizes;
+  const size = product.sizes?.find((s) => s.id === sizeId),
+    selected = product.toppings?.filter((t) => toppingIds.includes(t.id)) || [];
+  const unitPrice =
+    product.basePrice +
+    (size?.priceDelta || 0) +
+    selected.reduce((v, t) => v + t.price, 0);
+  const handleAdd = () => {
+    if (!size) {
+      setError("Sản phẩm chưa có tùy chọn size hợp lệ");
+      return;
+    }
+    const names = selected.map((t) => t.name);
+    add({
+      key: [product.id, size.id, ...[...toppingIds].sort()].join(":"),
+      productId: product.id,
+      name: product.name,
+      sizeId: size.id,
+      sizeName: size.name,
+      toppingIds: [...toppingIds],
+      toppingNames: names,
+      unitPrice,
+      quantity,
+      category: product.category,
+      imageUrl: drinkPhoto(product.name, product.category, product.imageUrl),
+    });
+    router.push("/cart");
+  };
+  return (
+    <div className="container inner-page">
+      <div className="breadcrumbs">
+        <Link href="/">Trang chủ</Link> / <Link href="/menu">Thực đơn</Link> /{" "}
+        {product.name}
+      </div>
+      <div className="detail-grid">
+        <div className="detail-art">
+          <span className="detail-art-glow" />
+          <img
+            className="detail-photo"
+            src={drinkPhoto(product.name, product.category, product.imageUrl)}
+            alt={product.name}
+          />
+          <div className="detail-tag">✦ BREWLITE SPECIAL</div>
+        </div>
+        <div className="detail-copy">
+          <span className="eyebrow">
+            {product.category.toUpperCase()} · MADE WITH LOVE
+          </span>
+          <h1>{product.name}</h1>
+          <p className="detail-description">
+            {product.description || "Tận hưởng hương vị thơm ngon từ BrewLite."}
+          </p>
+          <p className="detail-price">
+            {money(unitPrice)} <small>/ ly</small>
+          </p>
+          <div className="option-group">
+            <h3>
+              Chọn kích cỡ <small>(Bắt buộc)</small>
+            </h3>
+            <div className="size-options">
+              {visibleSizes?.map((s) => (
+                <button
+                  className={sizeId === s.id ? "option active" : "option"}
+                  key={s.id}
+                  onClick={() => setSizeId(s.id)}
+                >
+                  <strong>{s.name}</strong>
+                  <small>
+                    {s.priceDelta === 0
+                      ? "Giá gốc"
+                      : `${s.priceDelta > 0 ? "+" : ""}${money(s.priceDelta)}`}
+                  </small>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="option-group">
+            <h3>
+              Topping yêu thích{" "}
+              <small>(Tùy chọn · món nào cũng thêm được)</small>
+            </h3>
+            <p className="muted small">
+              Chọn nhiều topping tùy thích. Giá mỗi loại được cộng vào giá ly
+              của bạn.
+            </p>
+            {product.toppings?.length ? (
+              <>
+                <div className="topping-grid">
+                  {product.toppings.map((t) => {
+                    const photo = toppingPhoto(t.name);
+                    const checked = toppingIds.includes(t.id);
+                    return (
+                      <label
+                        className={`topping-card ${checked ? "selected" : ""} ${!t.isAvailable ? "unavailable" : ""}`}
+                        key={t.id}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!t.isAvailable}
+                          onChange={(e) =>
+                            setToppingIds((old) =>
+                              e.target.checked
+                                ? [...old, t.id]
+                                : old.filter((x) => x !== t.id),
+                            )
+                          }
+                        />
+                        <span className="topping-check" aria-hidden="true">
+                          {t.isAvailable ? (checked ? "✓" : "+") : "×"}
+                        </span>
+                        {photo ? (
+                          <img
+                            src={photo}
+                            alt={t.name}
+                            loading="lazy"
+                            className="topping-thumb"
+                          />
+                        ) : (
+                          <span className="topping-fallback" aria-hidden="true">
+                            🧋
+                          </span>
+                        )}
+                        <strong>{t.name}</strong>
+                        <small>
+                          {t.isAvailable ? `+${money(t.price)}` : "Hết hàng"}
+                        </small>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="topping-summary">
+                  Đã chọn <b>{selected.length}</b> topping · Phụ thu{" "}
+                  <b>{money(selected.reduce((sum, t) => sum + t.price, 0))}</b>
+                </div>
+              </>
+            ) : (
+              <p className="muted">Chưa có topping cho món này.</p>
+            )}
+          </div>
+          <div className="buy-row">
+            <Quantity quantity={quantity} onChange={setQuantity} />
+            <button
+              className="btn btn-grow"
+              disabled={!sizeId}
+              onClick={handleAdd}
+            >
+              Thêm vào giỏ · {money(unitPrice * quantity)} ↗
+            </button>
+          </div>
+          <p className="muted small">
+            ✓ Bạn có thể điều chỉnh số lượng trong giỏ hàng.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

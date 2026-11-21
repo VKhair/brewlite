@@ -9,8 +9,9 @@ actor "VNPay Sandbox" as Gateway
 
 rectangle "BrewLite" {
   usecase "Đặt và thanh toán" as Checkout
-  usecase "Tạo đơn PENDING và giữ tồn" as Create
+  usecase "Tạo đơn PENDING và lưu snapshot" as Create
   usecase "Khởi tạo lần thử thanh toán" as Pay
+  usecase "Kiểm tra công thức và trừ tồn theo paymentId" as Inventory
   usecase "Thanh toán mock" as Mock
   usecase "Mở checkout VNPay" as Vnpay
   usecase "Điều hướng về web qua Return URL" as Return
@@ -27,10 +28,16 @@ Customer --> Retry
 Customer --> Cancel
 Checkout ..> Create : <<include>>
 Checkout ..> Pay : <<include>>
+Pay ..> Inventory : <<include>>
 Mock ..> Pay : <<extend>>
 Vnpay ..> Pay : <<extend>>
 Retry ..> Pay : <<include>>
 Gateway --> Ipn
+
+note bottom of Cancel
+  Phiên VNPay đang chờ còn hạn chặn hủy.
+  Khi hết hạn, hủy hoàn nguyên liệu theo paymentId và hoàn điểm.
+end note
 
 note right of Ipn
   Ghi kết quả thanh toán và trạng thái đơn.

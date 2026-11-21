@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{customerEmail}}",
+      "password": "{{customerPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        let passed = false;
+        pm.test('Đăng nhập cấp JWT của đúng tài khoản', () => {
+          pm.response.to.have.status(200);
+          pm.expect(data.user.id).to.equal(pm.environment.get('customerId'));
+          pm.expect(data.token_type).to.equal('Bearer');
+          pm.expect(data.access_token).to.be.a('string').and.not.empty;
+          passed = true;
+        });
+        if (!passed) {
+          pm.execution.setNextRequest(null);
+        } else {
+          pm.environment.set('customerToken', data.access_token);
+          if (pm.environment.get('checkoutMode') === 'cancel') pm.execution.setNextRequest('07 Tạo đơn');
+        }
+      })();
+    language: text/javascript
+order: 5000

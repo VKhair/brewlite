@@ -1,0 +1,8 @@
+$kind: collection
+description: Hai request đọc. Chạy lần lượt 1 rồi 3 VU, mỗi lượt 1 phút.
+scripts:
+  - type: http:beforeRequest
+    code: |-
+      // Pace each VU independently before every request.
+      setTimeout(() => {}, 1100);
+    language: text/javascript

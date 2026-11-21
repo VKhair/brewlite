@@ -1,10 +1,9 @@
-
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { AppModule } from './app.module';
-import { configureHttp } from './http';
+import { configureHttp } from './common/http/configure-http';
 
 async function bootstrap() {
   const localEnv = resolve(__dirname, '../../..', '.env');

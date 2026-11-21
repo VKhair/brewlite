@@ -1,5 +1,7 @@
 # Hướng dẫn Kiểm thử Backend BrewLite bằng Postman
 
+Để chạy luồng đặt món, thanh toán VNPay Sandbox và đo hiệu năng trên môi trường triển khai, xem [hướng dẫn kiểm thử server](server-testing.md).
+
 Thư mục này chứa bộ **Postman Collection** và **Environment** chuẩn để kiểm thử toàn diện các API của Backend BrewLite (NestJS), bao gồm đầy đủ **10 Task trong Product Backlog** của đồ án Công nghệ Phần mềm.
 
 ---

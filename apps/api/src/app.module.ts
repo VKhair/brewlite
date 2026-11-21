@@ -1,28 +1,30 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
-import { JwtModule } from '@nestjs/jwt';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuthController, AuthService, JwtGuard, jwtOptions } from './auth';
-import { ProductsController, ProductsService } from './products';
-import { OrdersController, OrdersService } from './orders';
-import { PaymentsController, PaymentsService } from './payments';
-import { ApiErrorFilter } from './api-error.filter';
-import { createValidationPipe } from './validation';
-import { createPaymentProvider, PAYMENT_PROVIDER } from './payment-provider';
+import { AuthModule } from './auth/auth.module';
+import { ApiErrorFilter } from './common/http/api-error.filter';
+import { createValidationPipe } from './common/validation/validation.pipe';
+import { CouponsModule } from './coupons/coupons.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { OrdersModule } from './orders/orders.module';
+import { PaymentsModule } from './payments/payments.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { CouponsController } from './coupons/coupons.controller';
-import { CouponsService } from './coupons/coupons.service';
-import { InventoryController } from './inventory/inventory.controller';
-import { InventoryService } from './inventory/inventory.service';
-import { AdminGuard } from './admin.guard';
+import { ProductsModule } from './products/products.module';
 
 @Module({
-  imports: [JwtModule.registerAsync({ useFactory: jwtOptions }), PrismaModule],
-  controllers: [AppController, ProductsController, AuthController, OrdersController, PaymentsController, CouponsController, InventoryController],
+  imports: [
+    PrismaModule,
+    ProductsModule,
+    AuthModule,
+    OrdersModule,
+    PaymentsModule,
+    CouponsModule,
+    InventoryModule,
+  ],
+  controllers: [AppController],
   providers: [
-    AppService, ProductsService, AuthService, JwtGuard, OrdersService, PaymentsService, CouponsService, InventoryService, AdminGuard,
-    { provide: PAYMENT_PROVIDER, useFactory: createPaymentProvider },
+    AppService,
     { provide: APP_PIPE, useFactory: createValidationPipe },
     { provide: APP_FILTER, useClass: ApiErrorFilter },
   ],

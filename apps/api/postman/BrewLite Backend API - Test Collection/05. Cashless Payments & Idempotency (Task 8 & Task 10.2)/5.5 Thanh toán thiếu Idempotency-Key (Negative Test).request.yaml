@@ -7,9 +7,9 @@ body:
   type: text
   content: |-
     {
-      "orderId": {{secondOrderId}},
-      "method": "EWALLET",
-      "simulateSuccess": true
+      "orderId": "{{secondOrderId}}",
+      "paymentMethod": "EWALLET",
+      "mockOutcome": "SUCCESS"
     }
 auth:
   type: bearer

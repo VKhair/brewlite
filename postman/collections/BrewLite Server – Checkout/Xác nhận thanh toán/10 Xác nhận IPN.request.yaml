@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/orders/{{orderId}}"
+method: GET
+headers:
+  Authorization: Bearer {{customerToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        let passed = false;
+        pm.test('IPN xác nhận đơn PAID và giao dịch SUCCESS', () => {
+          pm.response.to.have.status(200);
+          pm.expect(data.orderId).to.equal(pm.environment.get('orderId'));
+          pm.expect(data.status).to.equal('PAID');
+          pm.expect(data.payments.some((payment) => payment.paymentId === pm.environment.get('paymentId') && payment.paymentMethod === 'VNPAY' && payment.status === 'SUCCESS')).to.equal(true);
+          pm.expect(data.history.some((entry) => entry.toStatus === 'PAID')).to.equal(true);
+          passed = true;
+        });
+        if (!passed) {
+          pm.execution.setNextRequest(null);
+        }
+      })();
+    language: text/javascript
+order: 1000

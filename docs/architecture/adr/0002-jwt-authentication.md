@@ -8,4 +8,4 @@ Web lưu phiên trong localStorage và gửi Authorization: Bearer khi gọi rou
 
 Đăng xuất xóa phiên cục bộ. Token đã cấp vẫn có hiệu lực trong thời hạn và bị từ chối nếu tài khoản không còn tồn tại. Phiên bản hiện tại dùng một access token cho mỗi lần xác thực, chưa có refresh token.
 
-Xem [dịch vụ xác thực và JwtGuard](../../../apps/api/src/auth.ts), [AdminGuard](../../../apps/api/src/admin.guard.ts) và [store web](../../../apps/web/src/lib/store.tsx).
+Xem [dịch vụ xác thực](../../../apps/api/src/auth/auth.service.ts), [JwtGuard](../../../apps/api/src/auth/jwt.guard.ts), [AdminGuard](../../../apps/api/src/auth/admin.guard.ts) và [store web](../../../apps/web/src/app/app-providers.tsx).

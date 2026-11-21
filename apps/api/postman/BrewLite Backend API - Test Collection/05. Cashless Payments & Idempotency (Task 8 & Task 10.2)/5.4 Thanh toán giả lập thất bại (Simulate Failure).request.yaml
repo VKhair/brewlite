@@ -8,10 +8,9 @@ body:
   type: text
   content: |-
     {
-      "orderId": {{secondOrderId}},
-      "method": "CARD",
-      "simulateSuccess": false,
-      "idempotencyKey": "{{failKey}}"
+      "orderId": "{{secondOrderId}}",
+      "paymentMethod": "CARD",
+      "mockOutcome": "FAILURE"
     }
 auth:
   type: bearer
@@ -25,13 +24,14 @@ scripts:
     language: text/javascript
   - type: afterResponse
     code: |-
-      pm.test('Status code là 200 hoặc 201', function () {
-          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      pm.test('HTTP 200', function () {
+          pm.response.to.have.status(200);
       });
-      pm.test('Đơn chuyển PAYMENT_FAILED, hoàn tồn kho', function () {
+      pm.test('Kiểm tra dữ liệu phản hồi', function () {
           const res = pm.response.json();
-          pm.expect(res.payment.status).to.eql('FAILED');
-          pm.expect(res.order.status).to.eql('PAYMENT_FAILED');
+          pm.expect(res.paymentStatus).to.eql('FAILED');
+          pm.expect(res.status).to.eql('PAYMENT_FAILED');
+          pm.expect(res.cartAction).to.eql('KEEP');
       });
     language: text/javascript
 order: 4000

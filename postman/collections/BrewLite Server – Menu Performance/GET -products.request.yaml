@@ -1,0 +1,15 @@
+$kind: http-request
+name: GET /products
+url: "{{baseUrl}}/products"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Menu chứa món thử đang bán', () => {
+        pm.response.to.have.status(200);
+        const data = pm.response.json();
+        pm.expect(data).to.be.an('array');
+        pm.expect(data.some((product) => product.id === pm.variables.get('testProductId') && product.isAvailable === true)).to.equal(true);
+      });
+    language: text/javascript
+order: 1000

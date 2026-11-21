@@ -33,7 +33,6 @@ model Product {
   imageUrl    String        @map("image_url")
   category    String
   isAvailable Boolean       @default(true) @map("is_available")
-  stock       Int           @default(100)
   sizes       ProductSize[]
   toppings    ProductTopping[]
   recipes     ProductRecipe[]
@@ -130,6 +129,8 @@ model Payment {
   user           User     @relation(fields: [userId], references: [id])
   order          Order    @relation(fields: [orderId], references: [id])
 
+  inventoryMovements InventoryMovement[]
+
   @@unique([userId, idempotencyKey])
   @@index([orderId])
   @@map("payments")
@@ -212,11 +213,14 @@ model InventoryMovement {
   quantity     Decimal    @db.Decimal(14, 3)
   reason       String
   orderId      String?    @map("order_id") @db.Uuid
+  paymentId    String?    @map("payment_id") @db.Uuid
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
   order        Order?     @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
-  @@unique([orderId, ingredientId, type])
+  payment     Payment?   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, ingredientId, type], map: "inventory_movements_payment_ingredient_type_key")
   @@index([ingredientId, createdAt])
   @@map("inventory_movements")
 }

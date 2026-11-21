@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/orders/{{orderId}}/cancel"
+method: PATCH
+headers:
+  Authorization: Bearer {{customerToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      (() => {
+        pm.test('Đơn thử đã được hủy', () => {
+          pm.response.to.have.status(200);
+          const order = pm.response.json();
+          pm.expect(order.orderId).to.equal(pm.environment.get('orderId'));
+          pm.expect(order.status).to.equal('CANCELLED');
+        });
+        pm.execution.setNextRequest(null);
+      })();
+    language: text/javascript
+order: 8000

@@ -1,0 +1,8 @@
+name: brewliteLocal-2
+values:
+  - key: baseUrl
+    value: ''
+  - key: testProductId
+    value: ''
+  - key: checkoutMode
+    value: ''

@@ -1,0 +1,2 @@
+$kind: collection
+description: Chạy thư mục Checkout với 1 iteration. Chế độ cancel hủy đơn. Chế độ vnpay khởi tạo một giao dịch Sandbox. Sau khi hoàn tất Sandbox, chạy riêng thư mục Xác nhận thanh toán.

@@ -24,4 +24,25 @@ INSERT INTO product_toppings (product_id, topping_id) VALUES
 ('10000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002'),
 ('10000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000003')
 ON CONFLICT DO NOTHING;
+INSERT INTO ingredients (name, unit, on_hand) VALUES
+('Fixture coffee', 'g', 100),
+('Fixture milk', 'ml', 100)
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO product_recipes (product_id, size, ingredient_id, quantity)
+SELECT sizes.product_id, sizes.name, ingredients.id,
+       CASE ingredients.name
+         WHEN 'Fixture coffee' THEN CASE sizes.name WHEN 'S' THEN 2 WHEN 'M' THEN 3 ELSE 4 END
+         ELSE 5
+       END
+FROM product_sizes sizes
+CROSS JOIN ingredients
+WHERE sizes.product_id = '10000000-0000-4000-8000-000000000001'
+  AND ingredients.name IN ('Fixture coffee', 'Fixture milk')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO topping_recipes (topping_id, ingredient_id, quantity)
+SELECT '20000000-0000-4000-8000-000000000001', id, 0.5
+FROM ingredients WHERE name = 'Fixture coffee'
+ON CONFLICT DO NOTHING;
 COMMIT;

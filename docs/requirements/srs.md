@@ -33,7 +33,7 @@ Tài liệu mô tả hành vi của phiên bản hiện tại và giữ các mã
 | FR-18 | Could | Điểm thưởng | POST /orders nhận pointsUsed, trừ sau coupon ở mức 1.000 VND mỗi điểm, giới hạn bởi số dư và số tiền còn lại. Đơn thanh toán thành công cộng một điểm cho mỗi 10.000 VND trọn vẹn. Hủy hợp lệ hoàn điểm. |
 | FR-19 | Could | Kho và công thức | ADMIN dùng /inventory để tạo và sửa nguyên liệu, nhập và điều chỉnh tồn, xem biến động gần đây và quản lý công thức món theo size hoặc topping. Dữ liệu nguyên liệu dùng số thập phân đến ba chữ số. |
 
-FR-17 và FR-18 có hợp đồng API. Giao diện checkout hiện chỉ gửi các dòng hàng. FR-12 ở phía nhân viên và FR-19 thực hiện qua API. Các trường và giới hạn đầu vào được định nghĩa tại [DTO nghiệp vụ](../../apps/api/src/dto.ts) và [DTO kho](../../apps/api/src/inventory/inventory.dto.ts).
+FR-17 và FR-18 có hợp đồng API. Giao diện checkout hiện chỉ gửi các dòng hàng. FR-12 ở phía nhân viên và FR-19 thực hiện qua API. Các trường và giới hạn đầu vào được định nghĩa tại [DTO xác thực](../../apps/api/src/auth/auth.dto.ts), [DTO đơn hàng](../../apps/api/src/orders/orders.dto.ts), [DTO thanh toán](../../apps/api/src/payments/payments.dto.ts) và [DTO kho](../../apps/api/src/inventory/inventory.dto.ts).
 
 ## Yêu cầu phi chức năng
 

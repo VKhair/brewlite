@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{baseUrl}}/health"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        let passed = false;
+        pm.test('API và cơ sở dữ liệu sẵn sàng', () => {
+          pm.response.to.have.status(200);
+          pm.expect(data.status).to.equal('ok');
+          pm.expect(data.database).to.equal('ok');
+          passed = true;
+        });
+        if (!passed) {
+          pm.execution.setNextRequest(null);
+        }
+      })();
+    language: text/javascript
+order: 1000

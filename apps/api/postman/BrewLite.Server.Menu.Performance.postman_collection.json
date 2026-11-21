@@ -1,0 +1,70 @@
+{
+  "info": {
+    "name": "BrewLite Server – Menu Performance",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Hai request đọc. Chạy lần lượt 1 rồi 3 VU, mỗi lượt 1 phút."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Pace each VU independently before every request.",
+          "setTimeout(() => {}, 1100);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "GET /products",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Menu chứa món thử đang bán', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).to.be.an('array');",
+              "  pm.expect(data.some((product) => product.id === pm.variables.get('testProductId') && product.isAvailable === true)).to.equal(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/products"
+      }
+    },
+    {
+      "name": "GET /products/:id",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Chi tiết đúng món thử', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.id).to.equal(pm.variables.get('testProductId'));",
+              "  pm.expect(data.isAvailable).to.equal(true);",
+              "  pm.expect(data.sizes.some((size) => size.isDefault)).to.equal(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/products/{{testProductId}}"
+      }
+    }
+  ]
+}

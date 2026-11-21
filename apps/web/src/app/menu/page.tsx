@@ -1,4 +1,5 @@
-import { MenuProducts, PageHeading } from "../../components/ui";
+import { MenuProducts } from "@/features/products/menu-products";
+import { PageHeading } from "@/shared/ui/page-heading";
 export default function Menu() {
   return (
     <div className="container inner-page">

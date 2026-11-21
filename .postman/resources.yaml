@@ -1,0 +1,14 @@
+# Use this workspace to collaborate
+workspace:
+  id: 09ce18f8-89bd-4c91-a9e3-9826c63b37e5
+
+localResources:
+  environments:
+    - ../apps/api/postman/BrewLite Local-1.environment.yaml
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../postman/collections/BrewLite Server – Checkout: f4a97ebd-1ec8-4d6c-8cb4-770eedb1a27e
+    ../postman/collections/BrewLite Server – Menu Performance: 3a61959a-c8b4-447b-a173-d99ae69e0c52

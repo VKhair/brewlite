@@ -53,6 +53,8 @@ Chờ PostgreSQL sẵn sàng trước khi chạy `db:setup`. Bước build tạo
 
 `db:setup` gọi migration rồi seed. DB mới nhận baseline và migration tính năng. Script nhận diện một số schema UUID cũ để ghi nhận baseline trước khi deploy migration. Seed giữ lại giá trị đã có. Sau khi đăng ký tài khoản và build API, có thể cấp quyền bằng `npm run user:staff -- email@example.com` hoặc `npm run user:admin --workspace=api -- email@example.com`. Xem [script migration](../apps/api/scripts/migrate.cjs) và [script seed](../apps/api/scripts/seed.cjs).
 
+Khi nâng cấp schema tồn theo nguyên liệu, dừng API phiên bản cũ, chạy migration rồi mới khởi động bản mới. Migration giữ nguyên lượng đã trừ cho các phiên VNPay đang chờ và hoàn lượng đã giữ của đơn chưa bắt đầu thanh toán. Trước khi mở bán, quản trị viên cần cấu hình công thức cho từng size và topping được bán rồi nhập tồn nguyên liệu. Seed ứng dụng tạo danh mục mẫu. Công thức và số dư mẫu dùng cho kiểm thử nằm trong fixture của suite PostgreSQL. Xem [migration tồn theo lần thanh toán](../apps/api/prisma/migrations/20261121000000_payment_ingredient_inventory/migration.sql).
+
 ## Build container và cấu hình thanh toán
 
 - [Dockerfile API](../apps/api/Dockerfile) gọi build:api, trong đó Prisma generate nạp [prisma.config.ts](../apps/api/prisma.config.ts). Biến DATABASE_URL đang được Compose cấp ở runtime, còn builder chưa khai báo biến này. Cấu hình CI cấp URL placeholder cho Prisma CLI. Cần cung cấp biến ở build stage để build sạch API theo cấu hình hiện tại. Nhận định này dựa trên cấu hình trong repo.

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { StoreProvider } from "../lib/store";
-import { Header, Footer } from "../components/ui";
+import { AppProviders } from "./app-providers";
+import { Header } from "@/shared/layout/header";
+import { Footer } from "@/shared/layout/footer";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "BrewLite | Đặt nước thật dễ",
@@ -18,11 +19,11 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body>
-        <StoreProvider>
+        <AppProviders>
           <Header />
           <main className="main-content">{children}</main>
           <Footer />
-        </StoreProvider>
+        </AppProviders>
       </body>
     </html>
   );

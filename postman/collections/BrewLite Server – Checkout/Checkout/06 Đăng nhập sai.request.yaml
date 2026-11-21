@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{customerEmail}}",
+      "password": "BrewLite9-InvalidPassword"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        let passed = false;
+        pm.test('Sai mật khẩu bị từ chối', () => {
+          pm.response.to.have.status(401);
+          pm.expect(data.code).to.equal('INVALID_CREDENTIALS');
+          passed = true;
+        });
+        if (!passed) {
+          pm.execution.setNextRequest(null);
+        }
+      })();
+    language: text/javascript
+order: 6000

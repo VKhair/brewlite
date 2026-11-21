@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{baseUrl}}/products/{{testProductId}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      (() => {
+        let data;
+        try { data = pm.response.json(); } catch (_) {}
+        let passed = false;
+        pm.test('Chi tiết có kích cỡ mặc định và giá hợp lệ', () => {
+          pm.response.to.have.status(200);
+          pm.expect(data.id).to.equal(pm.environment.get('testProductId'));
+          pm.expect(data.isAvailable).to.equal(true);
+          const sizes = data.sizes.filter((size) => size.isDefault);
+          pm.expect(sizes).to.have.lengthOf(1);
+          pm.expect(Number.isSafeInteger(data.basePrice + sizes[0].priceDelta)).to.equal(true);
+          pm.expect(data.basePrice + sizes[0].priceDelta).to.be.greaterThan(0);
+          passed = true;
+        });
+        if (!passed) {
+          pm.execution.setNextRequest(null);
+        } else {
+          const size = data.sizes.find((size) => size.isDefault);
+          pm.environment.set('sizeId', size.id);
+          pm.environment.set('expectedTotal', String(data.basePrice + size.priceDelta));
+        }
+      })();
+    language: text/javascript
+order: 3000

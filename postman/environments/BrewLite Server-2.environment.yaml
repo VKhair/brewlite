@@ -1,0 +1,30 @@
+name: BrewLite Server
+values:
+  - key: baseUrl
+    value: 'https://brewlite.vkhair.dev/api/backend'
+  - key: testProductId
+    value: 10000000-0000-4000-8000-000000000001
+  - key: checkoutMode
+    value: cancel
+  - key: customerEmail
+    value: ''
+  - key: customerPassword
+    value: ''
+  - key: customerToken
+    value: ''
+  - key: customerId
+    value: ''
+  - key: sizeId
+    value: ''
+  - key: expectedTotal
+    value: ''
+  - key: orderId
+    value: ''
+  - key: orderCode
+    value: ''
+  - key: paymentId
+    value: ''
+  - key: checkoutUrl
+    value: ''
+  - key: idempotencyKey
+    value: ''
